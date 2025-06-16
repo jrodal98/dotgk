@@ -3,7 +3,7 @@ use super::ConditionType;
 use super::Evaluator;
 use anyhow::Context;
 
-use tracing::{debug, error, info, instrument};
+use tracing::instrument;
 
 #[derive(Debug)]
 pub struct HostnameEvaluator;
