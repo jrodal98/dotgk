@@ -13,8 +13,7 @@ pub struct Gatekeeper {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Group {
-    #[serde(rename = "type")]
-    pub group_type: GroupType,
+    pub evaluator: Evaluator,
     #[serde(rename = "condition")]
     pub condition_type: String,
     pub value: String,
@@ -24,7 +23,7 @@ pub struct Group {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
-pub enum GroupType {
+pub enum Evaluator {
     Hostname,
     File,
 }
@@ -46,6 +45,6 @@ pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
 
 pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> bool {
     gatekeeper.groups.iter().any(|group| {
-        group.group_type.evaluate(group) && group.on_match
+        group.evaluator.evaluate(group) && group.on_match
     }) || gatekeeper.on_no_match
 }

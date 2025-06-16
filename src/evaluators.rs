@@ -1,4 +1,4 @@
-use crate::gatekeeper::{Group, GroupType};
+use crate::gatekeeper::{Group, Evaluator};
 use std::path::PathBuf;
 use anyhow::Context;
 use tracing::{debug, error, info, instrument};
@@ -44,12 +44,12 @@ impl GroupEvaluator for FileEvaluator {
     }
 }
 
-impl GroupEvaluator for GroupType {
+impl GroupEvaluator for Evaluator {
     #[instrument]
     fn evaluate(&self, group: &Group) -> bool {
         match self {
-            GroupType::Hostname => HostnameEvaluator.evaluate(group),
-            GroupType::File => FileEvaluator.evaluate(group),
+            Evaluator::Hostname => HostnameEvaluator.evaluate(group),
+            Evaluator::File => FileEvaluator.evaluate(group),
         }
     }
 }
