@@ -17,10 +17,10 @@ impl GroupEvaluator for HostnameEvaluator {
     fn evaluate(&self, group: &Group) -> bool {
         let hostname = hostname::get().context("Failed to get hostname").unwrap().into_string().unwrap();
         match group.condition_type.as_str() {
-            "equal" => hostname == group.value,
-            "not equal" => hostname != group.value,
+            "equal" => hostname == group.value.as_str().unwrap(),
+            "not equal" => hostname != group.value.as_str().unwrap(),
             "one of" => {
-                let values: Vec<&str> = group.value.split(',').map(|s| s.trim()).collect();
+                let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
                 values.contains(&hostname.as_str())
             }
             _ => {
@@ -34,8 +34,8 @@ impl GroupEvaluator for HostnameEvaluator {
 impl GroupEvaluator for FileEvaluator {
     fn evaluate(&self, group: &Group) -> bool {
         match group.condition_type.as_str() {
-            "exists" => PathBuf::from(&group.value).exists(),
-            "not exists" => !PathBuf::from(&group.value).exists(),
+            "exists" => PathBuf::from(&group.value.as_str().unwrap()).exists(),
+            "not exists" => !PathBuf::from(&group.value.as_str().unwrap()).exists(),
             _ => {
                 eprintln!("Invalid condition for file: {}", group.condition_type);
                 false

@@ -3,6 +3,7 @@ use anyhow::Context;
 use anyhow::Result;
 use dirs::config_dir;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Gatekeeper {
@@ -16,7 +17,7 @@ pub struct Group {
     pub evaluator: Evaluator,
     #[serde(rename = "condition")]
     pub condition_type: String,
-    pub value: String,
+    pub value: Value,
     #[serde(default = "default_true")]
     pub on_match: bool,
 }
