@@ -14,6 +14,7 @@ pub enum ConditionType {
     None,
 }
 
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Evaluator {
     #[serde(rename = "name")]
@@ -33,7 +34,6 @@ pub trait GroupEvaluator {
     fn evaluate(&self, group: &Evaluator) -> bool;
 }
 
-
 impl Evaluator {
     pub fn evaluate(&self) -> bool {
         match self.evaluator_type {
@@ -42,5 +42,10 @@ impl Evaluator {
         }
 
     }
+
+    fn value_as_vec<T: for<'de> serde::Deserialize<'de>>(&self) -> Vec<T> {
+        self.value.as_array().unwrap().into_iter().map(|v| serde_json::from_value(v.clone()).unwrap()).collect()
+    }
+
 
 }

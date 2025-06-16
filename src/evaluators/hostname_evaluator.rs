@@ -17,16 +17,16 @@ impl GroupEvaluator for HostnameEvaluator {
             ConditionType::Eq => hostname == group.value.as_str().unwrap(),
             ConditionType::Neq => hostname != group.value.as_str().unwrap(),
             ConditionType::Any => {
-                let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
-                values.contains(&hostname.as_str())
+                let values: Vec<String> = group.value_as_vec();
+                values.contains(&hostname.to_string())
             }
             ConditionType::All => {
-                let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
+                let values: Vec<String> = group.value_as_vec();
                 values.iter().all(|v| hostname == *v)
             }
             ConditionType::None => {
-                let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
-                !values.contains(&hostname.as_str())
+                let values: Vec<String> = group.value_as_vec();
+                !values.contains(&hostname.to_string())
             }
         }
     }
