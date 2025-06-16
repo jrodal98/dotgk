@@ -18,17 +18,17 @@ impl GroupEvaluator for HostnameEvaluator {
     fn evaluate(&self, group: &Group) -> bool {
         let hostname = hostname::get().context("Failed to get hostname").unwrap().into_string().unwrap();
         match &group.condition_type {
-            ConditionType::Equal => hostname == group.value.as_str().unwrap(),
-            ConditionType::NotEqual => hostname != group.value.as_str().unwrap(),
-            ConditionType::OneOf => {
+            ConditionType::Eq => hostname == group.value.as_str().unwrap(),
+            ConditionType::Neq => hostname != group.value.as_str().unwrap(),
+            ConditionType::Any => {
                 let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
                 values.contains(&hostname.as_str())
             }
-            ConditionType::AllOf => {
+            ConditionType::All => {
                 let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
                 values.iter().all(|v| hostname == *v)
             }
-            ConditionType::NoneOf => {
+            ConditionType::None => {
                 let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
                 !values.contains(&hostname.as_str())
             }

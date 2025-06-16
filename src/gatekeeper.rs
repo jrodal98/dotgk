@@ -15,11 +15,12 @@ pub struct Gatekeeper {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum ConditionType {
-    Equal,
-    NotEqual,
-    OneOf,
-    AllOf,
-    NoneOf,
+    Eq,
+    Neq,
+    Any,
+    All,
+    None,
+    //
     Exists,
     NotExists,
 }
