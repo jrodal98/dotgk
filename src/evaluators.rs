@@ -1,4 +1,4 @@
-use crate::gatekeeper::{Group, Evaluator};
+use crate::gatekeeper::{Group, ConditionType, Evaluator};
 use std::path::PathBuf;
 use anyhow::Context;
 use tracing::{debug, instrument};
@@ -12,32 +12,42 @@ pub struct HostnameEvaluator;
 #[derive(Debug)]
 pub struct FileEvaluator;
 
+// Implement GroupEvaluator for HostnameEvaluator
 impl GroupEvaluator for HostnameEvaluator {
     #[instrument]
     fn evaluate(&self, group: &Group) -> bool {
         let hostname = hostname::get().context("Failed to get hostname").unwrap().into_string().unwrap();
-        match group.condition_type.as_str() {
-            "equal" => hostname == group.value.as_str().unwrap(),
-            "not equal" => hostname != group.value.as_str().unwrap(),
-            "one of" => {
+        match &group.condition_type {
+            ConditionType::Equal => hostname == group.value.as_str().unwrap(),
+            ConditionType::NotEqual => hostname != group.value.as_str().unwrap(),
+            ConditionType::OneOf => {
                 let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
                 values.contains(&hostname.as_str())
             }
+            ConditionType::AllOf => {
+                let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
+                values.iter().all(|v| hostname == *v)
+            }
+            ConditionType::NoneOf => {
+                let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
+                !values.contains(&hostname.as_str())
+            }
             _ => {
-                debug!("Invalid condition for hostname: {}", group.condition_type);
+                debug!("Invalid condition type for hostname evaluator");
                 false
             }
         }
     }
 }
 
+// Implement GroupEvaluator for FileEvaluator
 impl GroupEvaluator for FileEvaluator {
     fn evaluate(&self, group: &Group) -> bool {
-        match group.condition_type.as_str() {
-            "exists" => PathBuf::from(&group.value.as_str().unwrap()).exists(),
-            "not exists" => !PathBuf::from(&group.value.as_str().unwrap()).exists(),
+        match &group.condition_type {
+            ConditionType::Exists => PathBuf::from(&group.value.as_str().unwrap()).exists(),
+            ConditionType::NotExists => !PathBuf::from(&group.value.as_str().unwrap()).exists(),
             _ => {
-                eprintln!("Invalid condition for file: {}", group.condition_type);
+                eprintln!("Invalid condition type for file evaluator");
                 false
             }
         }

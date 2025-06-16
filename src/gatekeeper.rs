@@ -13,10 +13,22 @@ pub struct Gatekeeper {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ConditionType {
+    Equal,
+    NotEqual,
+    OneOf,
+    AllOf,
+    NoneOf,
+    Exists,
+    NotExists,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Group {
     pub evaluator: Evaluator,
     #[serde(rename = "condition")]
-    pub condition_type: String,
+    pub condition_type: ConditionType,
     pub value: Value,
     #[serde(default = "default_true")]
     pub on_match: bool,
