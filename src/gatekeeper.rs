@@ -28,16 +28,21 @@ pub enum ConditionType {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Group {
     pub evaluator: Evaluator,
-    #[serde(rename = "condition")]
-    pub condition_type: ConditionType,
-    pub value: Value,
     #[serde(default = "default_true")]
     pub on_match: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct Evaluator {
+    #[serde(rename = "name")]
+    pub evaluator_type: EvaluatorType,
+    pub condition: ConditionType,
+    pub value: Value,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
-pub enum Evaluator {
+pub enum EvaluatorType {
     Hostname,
     File,
 }
@@ -59,7 +64,7 @@ pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
 
 pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> bool {
     for group in gatekeeper.groups.iter() {
-        let is_match = group.evaluator.evaluate(group);
+        let is_match = group.evaluator.evaluate();
         match (is_match, group.on_match) {
             (true, true) => return true,
             (true, false) => return false,

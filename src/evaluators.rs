@@ -1,10 +1,10 @@
-use crate::gatekeeper::{Group, ConditionType, Evaluator};
+use crate::gatekeeper::{ConditionType, Evaluator, EvaluatorType};
 use std::path::PathBuf;
 use anyhow::Context;
 use tracing::{debug, instrument};
 
 pub trait GroupEvaluator {
-    fn evaluate(&self, group: &Group) -> bool;
+    fn evaluate(&self, group: &Evaluator) -> bool;
 }
 
 #[derive(Debug)]
@@ -15,9 +15,9 @@ pub struct FileEvaluator;
 // Implement GroupEvaluator for HostnameEvaluator
 impl GroupEvaluator for HostnameEvaluator {
     #[instrument]
-    fn evaluate(&self, group: &Group) -> bool {
+    fn evaluate(&self, group: &Evaluator) -> bool {
         let hostname = hostname::get().context("Failed to get hostname").unwrap().into_string().unwrap();
-        match &group.condition_type {
+        match &group.condition {
             ConditionType::Eq => hostname == group.value.as_str().unwrap(),
             ConditionType::Neq => hostname != group.value.as_str().unwrap(),
             ConditionType::Any => {
@@ -42,8 +42,8 @@ impl GroupEvaluator for HostnameEvaluator {
 
 // Implement GroupEvaluator for FileEvaluator
 impl GroupEvaluator for FileEvaluator {
-    fn evaluate(&self, group: &Group) -> bool {
-        match &group.condition_type {
+    fn evaluate(&self, group: &Evaluator) -> bool {
+        match &group.condition {
             ConditionType::Exists => PathBuf::from(&group.value.as_str().unwrap()).exists(),
             ConditionType::NotExists => !PathBuf::from(&group.value.as_str().unwrap()).exists(),
             _ => {
@@ -54,12 +54,13 @@ impl GroupEvaluator for FileEvaluator {
     }
 }
 
-impl GroupEvaluator for Evaluator {
-    #[instrument]
-    fn evaluate(&self, group: &Group) -> bool {
-        match self {
-            Evaluator::Hostname => HostnameEvaluator.evaluate(group),
-            Evaluator::File => FileEvaluator.evaluate(group),
+impl Evaluator {
+    pub fn evaluate(&self) -> bool {
+        match self.evaluator_type {
+            EvaluatorType::Hostname => HostnameEvaluator.evaluate(self),
+            EvaluatorType::File => FileEvaluator.evaluate(self),
         }
+
     }
+
 }
