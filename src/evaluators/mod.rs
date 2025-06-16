@@ -37,23 +37,23 @@ where
     fn evaluate(&self, group: &Evaluator) -> bool 
     {
         match &group.condition {
-            ConditionType::Eq => self.single_passes(group.value_as_single::<T>()),
-            ConditionType::Neq => !self.single_passes(group.value_as_single::<T>()),
+            ConditionType::Eq => self.match_condition(group.value_as_single::<T>()),
+            ConditionType::Neq => !self.match_condition(group.value_as_single::<T>()),
             ConditionType::Any => {
                 let values: Vec<T> = group.value_as_vec();
-                values.into_iter().any(|v| self.single_passes(v))
+                values.into_iter().any(|v| self.match_condition(v))
             }
             ConditionType::All => {
                 let values: Vec<T> = group.value_as_vec();
-                values.into_iter().all(|v| self.single_passes(v))
+                values.into_iter().all(|v| self.match_condition(v))
             }
             ConditionType::None => {
                 let values: Vec<T> = group.value_as_vec();
-                !values.into_iter().any(|v| self.single_passes(v))
+                !values.into_iter().any(|v| self.match_condition(v))
             }
         }
     }
-    fn single_passes(&self, value: T) -> bool;
+    fn match_condition(&self, value: T) -> bool;
 }
 
 impl Evaluator {

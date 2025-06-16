@@ -1,6 +1,4 @@
 use super::GroupEvaluator;
-use super::ConditionType;
-use super::Evaluator;
 
 use std::path::PathBuf;
 
@@ -9,7 +7,7 @@ pub struct FileEvaluator;
 
 // Implement GroupEvaluator for FileEvaluator
 impl GroupEvaluator<String> for FileEvaluator {
-    fn single_passes(&self, value: String) -> bool {
+    fn match_condition(&self, value: String) -> bool {
         PathBuf::from(value).exists()
     }
 }
