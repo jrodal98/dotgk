@@ -1,7 +1,6 @@
 use crate::gatekeeper::{Group, GroupType};
 use std::path::PathBuf;
 use anyhow::Context;
-
 use tracing::{debug, error, info, instrument};
 
 pub trait GroupEvaluator {
@@ -17,7 +16,6 @@ impl GroupEvaluator for HostnameEvaluator {
     #[instrument]
     fn evaluate(&self, group: &Group) -> bool {
         let hostname = hostname::get().context("Failed to get hostname").unwrap().into_string().unwrap();
-
         match group.condition_type.as_str() {
             "equal" => hostname == group.value,
             "not equal" => hostname != group.value,
@@ -46,9 +44,12 @@ impl GroupEvaluator for FileEvaluator {
     }
 }
 
-pub fn get_evaluator(group_type: &GroupType) -> Box<dyn GroupEvaluator> {
-    match group_type {
-        GroupType::Hostname => Box::new(HostnameEvaluator),
-        GroupType::File => Box::new(FileEvaluator),
+impl GroupEvaluator for GroupType {
+    #[instrument]
+    fn evaluate(&self, group: &Group) -> bool {
+        match self {
+            GroupType::Hostname => HostnameEvaluator.evaluate(group),
+            GroupType::File => FileEvaluator.evaluate(group),
+        }
     }
 }

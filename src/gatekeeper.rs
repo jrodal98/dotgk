@@ -1,4 +1,4 @@
-use crate::evaluators;
+use crate::evaluators::GroupEvaluator;
 use anyhow::Context;
 use anyhow::Result;
 use dirs::config_dir;
@@ -46,7 +46,6 @@ pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
 
 pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> bool {
     gatekeeper.groups.iter().any(|group| {
-        let evaluator = evaluators::get_evaluator(&group.group_type);
-        evaluator.evaluate(group) && group.on_match
+        group.group_type.evaluate(group) && group.on_match
     }) || gatekeeper.on_no_match
 }
