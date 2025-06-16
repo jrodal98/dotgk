@@ -30,8 +30,30 @@ pub enum EvaluatorType {
     File,
 }
 
-pub trait GroupEvaluator {
-    fn evaluate(&self, group: &Evaluator) -> bool;
+pub trait GroupEvaluator<T> 
+where
+    T: for<'de> serde::Deserialize<'de> + PartialEq,
+{
+    fn evaluate(&self, group: &Evaluator) -> bool 
+    {
+        match &group.condition {
+            ConditionType::Eq => self.single_passes(group.value_as_single::<T>()),
+            ConditionType::Neq => !self.single_passes(group.value_as_single::<T>()),
+            ConditionType::Any => {
+                let values: Vec<T> = group.value_as_vec();
+                values.into_iter().any(|v| self.single_passes(v))
+            }
+            ConditionType::All => {
+                let values: Vec<T> = group.value_as_vec();
+                values.into_iter().all(|v| self.single_passes(v))
+            }
+            ConditionType::None => {
+                let values: Vec<T> = group.value_as_vec();
+                !values.into_iter().any(|v| self.single_passes(v))
+            }
+        }
+    }
+    fn single_passes(&self, value: T) -> bool;
 }
 
 impl Evaluator {
@@ -43,9 +65,17 @@ impl Evaluator {
 
     }
 
-    fn value_as_vec<T: for<'de> serde::Deserialize<'de>>(&self) -> Vec<T> {
+    fn value_as_vec<T>(&self) -> Vec<T> 
+    where
+        T: for<'de> serde::Deserialize<'de> + PartialEq,
+    {
         self.value.as_array().unwrap().into_iter().map(|v| serde_json::from_value(v.clone()).unwrap()).collect()
     }
 
-
+    fn value_as_single<T>(&self) -> T
+    where
+        T: for<'de> serde::Deserialize<'de> + PartialEq,
+    {
+        serde_json::from_value(self.value.clone()).unwrap()
+    }
 }

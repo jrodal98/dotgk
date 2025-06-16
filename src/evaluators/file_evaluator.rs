@@ -8,15 +8,8 @@ use std::path::PathBuf;
 pub struct FileEvaluator;
 
 // Implement GroupEvaluator for FileEvaluator
-impl GroupEvaluator for FileEvaluator {
-    fn evaluate(&self, group: &Evaluator) -> bool {
-        match &group.condition {
-            ConditionType::Eq => PathBuf::from(&group.value.as_str().unwrap()).exists(),
-            ConditionType::Neq => !PathBuf::from(&group.value.as_str().unwrap()).exists(),
-            _ => {
-                eprintln!("Invalid condition type for file evaluator");
-                false
-            }
-        }
+impl GroupEvaluator<String> for FileEvaluator {
+    fn single_passes(&self, value: String) -> bool {
+        PathBuf::from(value).exists()
     }
 }
