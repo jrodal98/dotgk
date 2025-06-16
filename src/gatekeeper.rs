@@ -20,9 +20,6 @@ pub enum ConditionType {
     Any,
     All,
     None,
-    //
-    Exists,
-    NotExists,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

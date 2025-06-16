@@ -32,10 +32,6 @@ impl GroupEvaluator for HostnameEvaluator {
                 let values: Vec<&str> = group.value.as_array().unwrap().into_iter().map(|v| v.as_str().unwrap()).collect();
                 !values.contains(&hostname.as_str())
             }
-            _ => {
-                debug!("Invalid condition type for hostname evaluator");
-                false
-            }
         }
     }
 }
@@ -44,8 +40,8 @@ impl GroupEvaluator for HostnameEvaluator {
 impl GroupEvaluator for FileEvaluator {
     fn evaluate(&self, group: &Evaluator) -> bool {
         match &group.condition {
-            ConditionType::Exists => PathBuf::from(&group.value.as_str().unwrap()).exists(),
-            ConditionType::NotExists => !PathBuf::from(&group.value.as_str().unwrap()).exists(),
+            ConditionType::Eq => PathBuf::from(&group.value.as_str().unwrap()).exists(),
+            ConditionType::Neq => !PathBuf::from(&group.value.as_str().unwrap()).exists(),
             _ => {
                 eprintln!("Invalid condition type for file evaluator");
                 false
