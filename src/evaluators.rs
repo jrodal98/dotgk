@@ -2,14 +2,19 @@ use crate::gatekeeper::{Group, GroupType};
 use std::path::PathBuf;
 use anyhow::Context;
 
+use tracing::{debug, error, info, instrument};
+
 pub trait GroupEvaluator {
     fn evaluate(&self, group: &Group) -> bool;
 }
 
+#[derive(Debug)]
 pub struct HostnameEvaluator;
+#[derive(Debug)]
 pub struct FileEvaluator;
 
 impl GroupEvaluator for HostnameEvaluator {
+    #[instrument]
     fn evaluate(&self, group: &Group) -> bool {
         let hostname = hostname::get().context("Failed to get hostname").unwrap().into_string().unwrap();
 
@@ -21,7 +26,7 @@ impl GroupEvaluator for HostnameEvaluator {
                 values.contains(&hostname.as_str())
             }
             _ => {
-                eprintln!("Invalid condition for hostname: {}", group.condition_type);
+                debug!("Invalid condition for hostname: {}", group.condition_type);
                 false
             }
         }
