@@ -1,0 +1,20 @@
+{
+  "groups": [
+    {
+      "evaluator": {
+        "name": "file",
+        "condition": "none",
+        "value": ["/home/jrodal/profile.sh", "/home/jrodal/.zshrc"],
+        "on_no_match": false
+      }
+    },
+    {
+      "evaluator": {
+        "name": "hostname",
+        "condition": "eq",
+        "value": "pop-os"
+      }
+    }
+  ],
+  "on_no_match": false
+}
