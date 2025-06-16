@@ -44,7 +44,14 @@ pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
 }
 
 pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> bool {
-    gatekeeper.groups.iter().any(|group| {
-        group.evaluator.evaluate(group) && group.on_match
-    }) || gatekeeper.on_no_match
+    for group in gatekeeper.groups.iter() {
+        let is_match = group.evaluator.evaluate(group);
+        match (is_match, group.on_match) {
+            (true, true) => return true,
+            (true, false) => return false,
+            (false, _) => continue
+        }
+
+    }
+    gatekeeper.on_no_match
 }

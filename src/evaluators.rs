@@ -1,7 +1,7 @@
 use crate::gatekeeper::{Group, Evaluator};
 use std::path::PathBuf;
 use anyhow::Context;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, instrument};
 
 pub trait GroupEvaluator {
     fn evaluate(&self, group: &Group) -> bool;
