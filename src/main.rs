@@ -1,6 +1,6 @@
 mod cli;
-mod evaluators;
 mod gatekeeper;
+mod evaluators;
 use clap::Parser;
 use anyhow::{Context, Result};
 use cli::{Args, Command};
