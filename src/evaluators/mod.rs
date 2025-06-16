@@ -37,8 +37,8 @@ where
     fn evaluate(&self, group: &Evaluator) -> bool 
     {
         match &group.condition {
-            ConditionType::Eq => self.match_condition(group.value_as_single::<T>()),
-            ConditionType::Neq => !self.match_condition(group.value_as_single::<T>()),
+            ConditionType::Eq => self.match_condition(group.value_as_single()),
+            ConditionType::Neq => !self.match_condition(group.value_as_single()),
             ConditionType::Any => {
                 let values: Vec<T> = group.value_as_vec();
                 values.into_iter().any(|v| self.match_condition(v))
