@@ -13,19 +13,3 @@ impl GroupEvaluator<String> for FileEvaluator {
         PathBuf::from(value).exists()
     }
 }
-
-
-#[derive(Debug)]
-pub struct FileContentEvaluator;
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct FileContentArgs {
-    path: String,
-    content: String
-}
-
-impl GroupEvaluator<FileContentArgs> for FileContentEvaluator {
-    fn match_condition(&self, value: FileContentArgs) -> bool {
-        PathBuf::from(value.path).exists()
-    }
-}
