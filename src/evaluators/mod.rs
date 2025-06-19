@@ -20,7 +20,8 @@ pub struct Evaluator {
     #[serde(rename = "name")]
     pub evaluator_type: EvaluatorType,
     pub condition: ConditionType,
-    pub value: Value,
+    #[serde(rename = "value")]
+    pub input: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -28,11 +29,13 @@ pub struct Evaluator {
 pub enum EvaluatorType {
     Hostname,
     File,
+    FileContent,
+
 }
 
 pub trait GroupEvaluator<T> 
 where
-    T: for<'de> serde::Deserialize<'de> + PartialEq,
+    T: for<'de> serde::Deserialize<'de>,
 {
     fn evaluate(&self, group: &Evaluator) -> bool 
     {
@@ -61,21 +64,22 @@ impl Evaluator {
         match self.evaluator_type {
             EvaluatorType::Hostname => crate::evaluators::hostname_evaluator::HostnameEvaluator.evaluate(self),
             EvaluatorType::File => crate::evaluators::file_evaluator::FileEvaluator.evaluate(self),
+            EvaluatorType::FileContent => crate::evaluators::file_evaluator::FileContentEvaluator.evaluate(self),
         }
 
     }
 
     fn value_as_vec<T>(&self) -> Vec<T> 
     where
-        T: for<'de> serde::Deserialize<'de> + PartialEq,
+        T: for<'de> serde::Deserialize<'de>,
     {
-        self.value.as_array().unwrap().into_iter().map(|v| serde_json::from_value(v.clone()).unwrap()).collect()
+        self.input.as_array().unwrap().into_iter().map(|v| serde_json::from_value(v.clone()).unwrap()).collect()
     }
 
     fn value_as_single<T>(&self) -> T
     where
-        T: for<'de> serde::Deserialize<'de> + PartialEq,
+        T: for<'de> serde::Deserialize<'de>,
     {
-        serde_json::from_value(self.value.clone()).unwrap()
+        serde_json::from_value(self.input.clone()).unwrap()
     }
 }
