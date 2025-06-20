@@ -97,7 +97,7 @@ impl<T> IntoIterator for OneOrMany<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase", tag = "type")]
+#[serde(rename_all = "lowercase", tag = "type", content = "args")]
 pub enum EvaluatorType {
     Hostname(OneOrMany<HostnameEvaluator>),
     File(OneOrMany<FileEvaluator>),
