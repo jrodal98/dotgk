@@ -20,7 +20,7 @@ pub enum ConditionType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Evaluator {
-    #[serde(rename = "group")]
+    #[serde(flatten)]
     pub evaluator_type: EvaluatorType,
     pub condition: ConditionType,
 }

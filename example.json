@@ -1,19 +1,24 @@
 {
   "groups": [
     {
-      "evaluator": {
-        "name": "file",
-        "condition": "none",
-        "value": ["/home/jrodal/profile.sh", "/home/jrodal/.zshrc"],
-        "on_no_match": false
-      }
+      "type": "file",
+      "args": [
+        {
+          "path": "/home/jrodal/profile.sh"
+        },
+        {
+          "path": "/home/jrodal/.zshrc"
+        }
+      ],
+      "condition": "all",
+      "on_match": false
     },
     {
-      "evaluator": {
-        "name": "hostname",
-        "condition": "eq",
-        "value": "pop-os"
-      }
+      "type": "hostname",
+      "args": {
+        "target": "pop-os"
+      },
+      "condition": "eq"
     }
   ],
   "on_no_match": false
