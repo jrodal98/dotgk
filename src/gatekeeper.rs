@@ -14,6 +14,7 @@ pub struct Gatekeeper {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Group {
+    #[serde(flatten)]
     pub evaluator: Evaluator,
     #[serde(default = "default_true")]
     pub on_match: bool,
