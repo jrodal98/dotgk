@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 // Define a trait for evaluators
-trait EvaluatorTrait {
+pub trait EvaluatorTrait {
     fn evaluate(&self) -> bool;
 }
 
@@ -32,22 +32,14 @@ pub enum OneOrMany<T> {
     Many(Vec<T>),
 }
 
-impl<T> OneOrMany<T> {
-    fn into_vec(self) -> Vec<T> {
-        match self {
-            Self::One(v) => vec![v],
-            Self::Many(v) => v,
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug)]
-struct HostnameEvaluator {
+pub struct HostnameEvaluator {
     target: String
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct FileEvaluator {
+pub struct FileEvaluator {
     path: String
 }
 
