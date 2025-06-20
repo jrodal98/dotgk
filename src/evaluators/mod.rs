@@ -1,8 +1,12 @@
 mod file_evaluator;
 mod hostname_evaluator;
-
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
+// Define a trait for evaluators
+trait EvaluatorTrait {
+    fn evaluate(&self) -> bool;
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -37,85 +41,101 @@ impl<T> OneOrMany<T> {
     }
 }
 
-pub trait MatchEvaluator<T> {
-    fn match_condition(&self, value: T) -> bool;
+#[derive(Serialize, Deserialize, Debug)]
+struct HostnameEvaluator {
+    target: String
+}
 
-    fn match_eq(&self, value: OneOrMany<T>) -> bool {
-        match value {
-            OneOrMany::One(v) => self.match_condition(v),
-            OneOrMany::Many(v) => self.match_all(OneOrMany::Many(v))
+#[derive(Serialize, Deserialize, Debug)]
+struct FileEvaluator {
+    path: String
+}
+
+impl EvaluatorTrait for FileEvaluator {
+    fn evaluate(&self) -> bool {
+        PathBuf::from(&self.path).exists()
+    }
+}
+
+impl EvaluatorTrait for HostnameEvaluator {
+    fn evaluate(&self) -> bool {
+        self.target == hostname::get().unwrap().to_str().unwrap().to_string()
+    }
+}
+
+enum OneOrManyRef<'a, T> {
+    One(&'a T),
+    Many(Vec<&'a T>),
+}
+
+impl<'a, T: EvaluatorTrait> OneOrManyRef<'a, T> {
+    fn match_eq(&self) -> bool {
+        self.iter().all(|v| v.evaluate())
+    }
+
+    fn match_neq(&self) -> bool {
+        self.iter().all(|v| !v.evaluate())
+    }
+
+    fn match_any(&self) -> bool {
+        self.iter().any(|v| v.evaluate())
+    }
+
+    fn match_all(&self) -> bool {
+        self.iter().all(|v| v.evaluate())
+    }
+
+    fn match_none(&self) -> bool {
+        self.iter().all(|v| !v.evaluate())
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = &T> + '_> {
+        match self {
+            OneOrManyRef::One(v) => Box::new(std::iter::once(*v)),
+            OneOrManyRef::Many(v) => Box::new(v.iter().copied()),
         }
     }
+}
 
-    fn match_neq(&self, value: OneOrMany<T>) -> bool {
-        !self.match_eq(value)
-    }
-
-    fn match_any(&self, value: OneOrMany<T>) -> bool {
-        let values = value.into_vec();
-        values.into_iter().any(|v| self.match_condition(v))
-    }
-
-    fn match_all(&self, value: OneOrMany<T>) -> bool {
-        let values = value.into_vec();
-        values.into_iter().all(|v| self.match_condition(v))
-    }
-
-    fn match_none(&self, value: OneOrMany<T>) -> bool {
-        !self.match_any(value)
+impl<'a, T> From<&'a OneOrMany<T>> for OneOrManyRef<'a, T> {
+    fn from(one_or_many: &'a OneOrMany<T>) -> Self {
+        match one_or_many {
+            OneOrMany::One(v) => OneOrManyRef::One(v),
+            OneOrMany::Many(v) => OneOrManyRef::Many(v.iter().collect()),
+        }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase", tag = "type", content = "args")]
 pub enum EvaluatorType {
-    Hostname(OneOrMany<String>),
-    File(OneOrMany<String>),
-    // FileContent(OneOrMany<String, String>),
+    Hostname(OneOrMany<HostnameEvaluator>),
+    File(OneOrMany<FileEvaluator>),
 }
-
 
 impl Evaluator {
     pub fn evaluate(&self) -> bool {
-        match &self.condition {
-            ConditionType::Eq => self.evaluator_type.match_condition(),
-            ConditionType::Neq => !self.match_condition(),
-            ConditionType::Any => {
-                let values: Vec<T> = self.evaluator_type.value_as_vec();
-                values.into_iter().any(|v| self.match_condition(v))
-            }
-            ConditionType::All => {
-                let values: Vec<T> = group.value_as_vec();
-                values.into_iter().all(|v| self.match_condition(v))
-            }
-            ConditionType::None => {
-                let values: Vec<T> = group.value_as_vec();
-                !values.into_iter().any(|v| self.match_condition(v))
-            }
-        }
-    }
-}
-
-pub trait GroupEvaluator<T>
-where
-    T: for<'de> serde::Deserialize<'de>,
-{
-    fn evaluate(&self, group: &Evaluator) -> bool {
-        match &group.condition {
-            ConditionType::Eq => self.match_condition(group.value_as_single()),
-            ConditionType::Neq => !self.match_condition(group.value_as_single()),
-            ConditionType::Any => {
-                let values: Vec<T> = group.value_as_vec();
-                values.into_iter().any(|v| self.match_condition(v))
-            }
-            ConditionType::All => {
-                let values: Vec<T> = group.value_as_vec();
-                values.into_iter().all(|v| self.match_condition(v))
-            }
-            ConditionType::None => {
-                let values: Vec<T> = group.value_as_vec();
-                !values.into_iter().any(|v| self.match_condition(v))
-            }
+        match &self.evaluator_type {
+            EvaluatorType::File(v) => {
+                let one_or_many = OneOrManyRef::from(v);
+                match &self.condition {
+                    ConditionType::Eq => one_or_many.match_eq(),
+                    ConditionType::Neq => one_or_many.match_neq(),
+                    ConditionType::Any => one_or_many.match_any(),
+                    ConditionType::All => one_or_many.match_all(),
+                    ConditionType::None => one_or_many.match_none(),
+                }
+            },
+            EvaluatorType::Hostname(v) => {
+                let one_or_many = OneOrManyRef::from(v);
+                match &self.condition {
+                    ConditionType::Eq => one_or_many.match_eq(),
+                    ConditionType::Neq => one_or_many.match_neq(),
+                    ConditionType::Any => one_or_many.match_any(),
+                    ConditionType::All => one_or_many.match_all(),
+                    ConditionType::None => one_or_many.match_none(),
+                }
+            },
         }
     }
 }
