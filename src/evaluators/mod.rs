@@ -20,7 +20,7 @@ pub enum ConditionType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Evaluator {
-    #[serde(rename = "name")]
+    #[serde(rename = "group")]
     pub evaluator_type: EvaluatorType,
     pub condition: ConditionType,
 }
@@ -97,7 +97,7 @@ impl<T> IntoIterator for OneOrMany<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase", tag = "type", content = "args")]
+#[serde(rename_all = "lowercase", tag = "type")]
 pub enum EvaluatorType {
     Hostname(OneOrMany<HostnameEvaluator>),
     File(OneOrMany<FileEvaluator>),
