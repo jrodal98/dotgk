@@ -63,12 +63,7 @@ impl EvaluatorTrait for HostnameEvaluator {
     }
 }
 
-enum OneOrManyRef<'a, T> {
-    One(&'a T),
-    Many(Vec<&'a T>),
-}
-
-impl<'a, T: EvaluatorTrait> OneOrManyRef<'a, T> {
+impl<T: EvaluatorTrait> OneOrMany<T> {
     fn match_eq(&self) -> bool {
         self.iter().all(|v| v.evaluate())
     }
@@ -91,17 +86,20 @@ impl<'a, T: EvaluatorTrait> OneOrManyRef<'a, T> {
 
     fn iter(&self) -> Box<dyn Iterator<Item = &T> + '_> {
         match self {
-            OneOrManyRef::One(v) => Box::new(std::iter::once(*v)),
-            OneOrManyRef::Many(v) => Box::new(v.iter().copied()),
+            OneOrMany::One(v) => Box::new(std::iter::once(v)),
+            OneOrMany::Many(v) => Box::new(v.iter()),
         }
     }
 }
 
-impl<'a, T> From<&'a OneOrMany<T>> for OneOrManyRef<'a, T> {
-    fn from(one_or_many: &'a OneOrMany<T>) -> Self {
-        match one_or_many {
-            OneOrMany::One(v) => OneOrManyRef::One(v),
-            OneOrMany::Many(v) => OneOrManyRef::Many(v.iter().collect()),
+impl<T> IntoIterator for OneOrMany<T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Self::One(v) => vec![v].into_iter(),
+            Self::Many(v) => v.into_iter(),
         }
     }
 }
@@ -113,29 +111,51 @@ pub enum EvaluatorType {
     File(OneOrMany<FileEvaluator>),
 }
 
+impl EvaluatorType {
+    fn match_eq(&self) -> bool {
+        match self {
+            EvaluatorType::File(v) => v.match_eq(),
+            EvaluatorType::Hostname(v) => v.match_eq(),
+        }
+    }
+
+    fn match_neq(&self) -> bool {
+        match self {
+            EvaluatorType::File(v) => v.match_neq(),
+            EvaluatorType::Hostname(v) => v.match_neq(),
+        }
+    }
+
+    fn match_any(&self) -> bool {
+        match self {
+            EvaluatorType::File(v) => v.match_any(),
+            EvaluatorType::Hostname(v) => v.match_any(),
+        }
+    }
+
+    fn match_all(&self) -> bool {
+        match self {
+            EvaluatorType::File(v) => v.match_all(),
+            EvaluatorType::Hostname(v) => v.match_all(),
+        }
+    }
+
+    fn match_none(&self) -> bool {
+        match self {
+            EvaluatorType::File(v) => v.match_none(),
+            EvaluatorType::Hostname(v) => v.match_none(),
+        }
+    }
+}
+
 impl Evaluator {
     pub fn evaluate(&self) -> bool {
-        match &self.evaluator_type {
-            EvaluatorType::File(v) => {
-                let one_or_many = OneOrManyRef::from(v);
-                match &self.condition {
-                    ConditionType::Eq => one_or_many.match_eq(),
-                    ConditionType::Neq => one_or_many.match_neq(),
-                    ConditionType::Any => one_or_many.match_any(),
-                    ConditionType::All => one_or_many.match_all(),
-                    ConditionType::None => one_or_many.match_none(),
-                }
-            },
-            EvaluatorType::Hostname(v) => {
-                let one_or_many = OneOrManyRef::from(v);
-                match &self.condition {
-                    ConditionType::Eq => one_or_many.match_eq(),
-                    ConditionType::Neq => one_or_many.match_neq(),
-                    ConditionType::Any => one_or_many.match_any(),
-                    ConditionType::All => one_or_many.match_all(),
-                    ConditionType::None => one_or_many.match_none(),
-                }
-            },
+        match &self.condition {
+            ConditionType::Eq => self.evaluator_type.match_eq(),
+            ConditionType::Neq => self.evaluator_type.match_neq(),
+            ConditionType::Any => self.evaluator_type.match_any(),
+            ConditionType::All => self.evaluator_type.match_all(),
+            ConditionType::None => self.evaluator_type.match_none(),
         }
     }
 }
