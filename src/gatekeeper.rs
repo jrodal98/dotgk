@@ -1,3 +1,5 @@
+use std::env;
+
 use anyhow::Context;
 use anyhow::Result;
 use dirs::config_dir;
@@ -29,8 +31,17 @@ fn default_true() -> bool {
     true
 }
 
-pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
-    let mut config_dir = config_dir().context("Failed to get config directory")?;
+pub fn get_gatekeeper_path(
+    name: &str,
+    config_path: Option<std::path::PathBuf>,
+) -> Result<std::path::PathBuf> {
+    let mut config_dir = if let Some(path) = config_path {
+        path
+    } else if let Ok(env_path) = env::var("DOTGK_CONFIG_DIR") {
+        std::path::PathBuf::from(env_path)
+    } else {
+        config_dir().context("Failed to get config directory")?
+    };
     config_dir.push("dotgk");
     config_dir.push(format!("{}.json", name));
     Ok(config_dir)

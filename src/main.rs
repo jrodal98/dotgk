@@ -25,7 +25,7 @@ fn main() -> Result<()> {
 #[instrument]
 fn evaluate_command(name: String) -> Result<()> {
     info!("Evaluating gatekeeper: {}", name);
-    let gatekeeper_path = get_gatekeeper_path(&name)
+    let gatekeeper_path = get_gatekeeper_path(&name, None)
         .with_context(|| format!("Failed to get gatekeeper path for '{}'", name))?;
     debug!("Gatekeeper path: {:?}", gatekeeper_path);
 

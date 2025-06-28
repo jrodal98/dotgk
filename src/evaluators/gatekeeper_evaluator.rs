@@ -16,7 +16,7 @@ pub struct GatekeeperEvaluator {
 impl EvaluatorTrait for GatekeeperEvaluator {
     fn evaluate(&self) -> Result<bool> {
         // Get the path to the referenced gatekeeper
-        let gatekeeper_path = get_gatekeeper_path(&self.name)
+        let gatekeeper_path = get_gatekeeper_path(&self.name, None)
             .with_context(|| format!("Failed to get path for gatekeeper '{}'", self.name))?;
 
         // Check if the gatekeeper exists
