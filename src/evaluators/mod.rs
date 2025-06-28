@@ -1,8 +1,10 @@
 mod file_evaluator;
+mod gatekeeper_evaluator;
 mod hostname_evaluator;
 
 use anyhow::Result;
 pub use file_evaluator::FileEvaluator;
+pub use gatekeeper_evaluator::GatekeeperEvaluator;
 pub use hostname_evaluator::HostnameEvaluator;
 use serde::Deserialize;
 use serde::Serialize;
@@ -87,6 +89,7 @@ impl<T> IntoIterator for OneOrMany<T> {
 pub enum EvaluatorType {
     Hostname(OneOrMany<HostnameEvaluator>),
     File(OneOrMany<FileEvaluator>),
+    Gatekeeper(OneOrMany<GatekeeperEvaluator>),
 }
 
 impl EvaluatorType {
@@ -94,6 +97,7 @@ impl EvaluatorType {
         match self {
             EvaluatorType::File(v) => v.match_eq(),
             EvaluatorType::Hostname(v) => v.match_eq(),
+            EvaluatorType::Gatekeeper(v) => v.match_eq(),
         }
     }
 
@@ -101,6 +105,7 @@ impl EvaluatorType {
         match self {
             EvaluatorType::File(v) => v.match_neq(),
             EvaluatorType::Hostname(v) => v.match_neq(),
+            EvaluatorType::Gatekeeper(v) => v.match_neq(),
         }
     }
 
@@ -108,6 +113,7 @@ impl EvaluatorType {
         match self {
             EvaluatorType::File(v) => v.match_any(),
             EvaluatorType::Hostname(v) => v.match_any(),
+            EvaluatorType::Gatekeeper(v) => v.match_any(),
         }
     }
 
@@ -115,6 +121,7 @@ impl EvaluatorType {
         match self {
             EvaluatorType::File(v) => v.match_all(),
             EvaluatorType::Hostname(v) => v.match_all(),
+            EvaluatorType::Gatekeeper(v) => v.match_all(),
         }
     }
 
@@ -122,6 +129,7 @@ impl EvaluatorType {
         match self {
             EvaluatorType::File(v) => v.match_none(),
             EvaluatorType::Hostname(v) => v.match_none(),
+            EvaluatorType::Gatekeeper(v) => v.match_none(),
         }
     }
 }
