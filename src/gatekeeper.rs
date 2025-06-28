@@ -1,9 +1,10 @@
 use anyhow::Context;
 use anyhow::Result;
 use dirs::config_dir;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::evaluators::{Evaluator};
+use crate::evaluators::Evaluator;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Gatekeeper {
@@ -20,7 +21,6 @@ pub struct Group {
     pub on_match: bool,
 }
 
-
 fn default_false() -> bool {
     false
 }
@@ -36,15 +36,14 @@ pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
     Ok(config_dir)
 }
 
-pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> bool {
+pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> Result<bool> {
     for group in gatekeeper.groups.iter() {
-        let is_match = group.evaluator.evaluate();
+        let is_match = group.evaluator.evaluate()?;
         match (is_match, group.on_match) {
-            (true, true) => return true,
-            (true, false) => return false,
-            (false, _) => continue
+            (true, true) => return Ok(true),
+            (true, false) => return Ok(false),
+            (false, _) => continue,
         }
-
     }
-    gatekeeper.on_no_match
+    Ok(gatekeeper.on_no_match)
 }

@@ -1,11 +1,18 @@
 mod cli;
-mod gatekeeper;
 mod evaluators;
+mod gatekeeper;
+use anyhow::Context;
+use anyhow::Result;
 use clap::Parser;
-use anyhow::{Context, Result};
-use cli::{Args, Command};
-use gatekeeper::{evaluate_gatekeeper, get_gatekeeper_path, Gatekeeper};
-use tracing::{debug, error, info, instrument};
+use cli::Args;
+use cli::Command;
+use gatekeeper::Gatekeeper;
+use gatekeeper::evaluate_gatekeeper;
+use gatekeeper::get_gatekeeper_path;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -35,7 +42,7 @@ fn evaluate_command(name: String) -> Result<()> {
         .with_context(|| format!("Failed to parse gatekeeper '{}'", name))?;
     debug!("Gatekeeper parsed successfully");
 
-    let result = evaluate_gatekeeper(&gatekeeper);
+    let result = evaluate_gatekeeper(&gatekeeper)?;
     info!("Evaluation result: {}", result);
     println!("{}", result);
     Ok(())

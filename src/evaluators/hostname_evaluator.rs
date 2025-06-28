@@ -1,3 +1,5 @@
+use anyhow::Context;
+use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -9,7 +11,11 @@ pub struct HostnameEvaluator {
 }
 
 impl EvaluatorTrait for HostnameEvaluator {
-    fn evaluate(&self) -> bool {
-        self.target == hostname::get().unwrap().to_str().unwrap().to_string()
+    fn evaluate(&self) -> Result<bool> {
+        let hostname = hostname::get().context("Failed to get hostname")?;
+        let hostname_str = hostname
+            .to_str()
+            .context("Failed to convert hostname to string")?;
+        Ok(self.target == hostname_str)
     }
 }

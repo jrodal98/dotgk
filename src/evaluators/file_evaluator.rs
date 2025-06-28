@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -11,7 +12,7 @@ pub struct FileEvaluator {
 }
 
 impl EvaluatorTrait for FileEvaluator {
-    fn evaluate(&self) -> bool {
-        PathBuf::from(&self.path).exists()
+    fn evaluate(&self) -> Result<bool> {
+        Ok(PathBuf::from(&self.path).exists())
     }
 }
