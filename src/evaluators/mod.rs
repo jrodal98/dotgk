@@ -1,7 +1,10 @@
 mod file_evaluator;
 mod hostname_evaluator;
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
+
+pub use file_evaluator::FileEvaluator;
+pub use hostname_evaluator::HostnameEvaluator;
+use serde::Deserialize;
+use serde::Serialize;
 
 // Define a trait for evaluators
 pub trait EvaluatorTrait {
@@ -30,29 +33,6 @@ pub struct Evaluator {
 pub enum OneOrMany<T> {
     One(T),
     Many(Vec<T>),
-}
-
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct HostnameEvaluator {
-    target: String
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct FileEvaluator {
-    path: String
-}
-
-impl EvaluatorTrait for FileEvaluator {
-    fn evaluate(&self) -> bool {
-        PathBuf::from(&self.path).exists()
-    }
-}
-
-impl EvaluatorTrait for HostnameEvaluator {
-    fn evaluate(&self) -> bool {
-        self.target == hostname::get().unwrap().to_str().unwrap().to_string()
-    }
 }
 
 impl<T: EvaluatorTrait> OneOrMany<T> {
