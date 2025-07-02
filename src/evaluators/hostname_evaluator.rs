@@ -54,19 +54,20 @@ mod tests {
         Gatekeeper::from_json(&gk_json)
     }
 
-    #[test]
-    fn test_pass() -> Result<()> {
-        let gk = get_gk("test-hostname")?;
+    fn helper(target: &str, expected: bool) -> Result<()> {
+        let gk = get_gk(target)?;
         let result = gk.evaluate()?;
-        assert!(result);
+        assert_eq!(result, expected);
         Ok(())
     }
 
     #[test]
+    fn test_pass() -> Result<()> {
+        helper("test-hostname", true)
+    }
+
+    #[test]
     fn test_fail() -> Result<()> {
-        let gk = get_gk("not-test-hostname")?;
-        let result = gk.evaluate()?;
-        assert!(!result);
-        Ok(())
+        helper("not-test-hostname", false)
     }
 }
