@@ -2,12 +2,10 @@ mod file_evaluator;
 mod gatekeeper_evaluator;
 mod hostname_evaluator;
 mod os_evaluator;
+mod evaluator_type;
 
 use anyhow::Result;
-pub use file_evaluator::FileEvaluator;
-pub use gatekeeper_evaluator::GatekeeperEvaluator;
-pub use hostname_evaluator::HostnameEvaluator;
-pub use os_evaluator::OSEvaluator;
+use evaluator_type::EvaluatorType;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -85,56 +83,6 @@ impl<T> IntoIterator for OneOrMany<T> {
         }
     }
 }
-
-macro_rules! impl_evaluator_methods {
-    ($enum_type:ident, $($variant:ident),+) => {
-        impl $enum_type {
-            fn match_eq(&self) -> Result<bool> {
-                match self {
-                    $(Self::$variant(v) => v.match_eq(),)+
-                }
-            }
-            fn match_neq(&self) -> Result<bool> {
-                match self {
-                    $(Self::$variant(v) => v.match_neq(),)+
-                }
-            }
-            fn match_any(&self) -> Result<bool> {
-                match self {
-                    $(Self::$variant(v) => v.match_any(),)+
-                }
-            }
-            fn match_all(&self) -> Result<bool> {
-                match self {
-                    $(Self::$variant(v) => v.match_all(),)+
-                }
-            }
-            fn match_none(&self) -> Result<bool> {
-                match self {
-                    $(Self::$variant(v) => v.match_none(),)+
-                }
-            }
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase", tag = "type", content = "args")]
-pub enum EvaluatorType {
-    Hostname(OneOrMany<HostnameEvaluator>),
-    File(OneOrMany<FileEvaluator>),
-    Gatekeeper(OneOrMany<GatekeeperEvaluator>),
-    Os(OneOrMany<OSEvaluator>),
-}
-
-// Use the macro for your enum:
-impl_evaluator_methods!(
-    EvaluatorType,
-    Hostname,
-    File,
-    Gatekeeper,
-    Os
-);
 
 impl Evaluator {
     pub fn evaluate(&self) -> Result<bool> {
