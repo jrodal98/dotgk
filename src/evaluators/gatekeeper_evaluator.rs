@@ -25,11 +25,11 @@ mod tests {
 
     #[test]
     fn test_pass() -> Result<()> {
-        test_helper("hostname_pass", true)
+        test_helper("gatekeeper_pass", true)
     }
 
-    // #[test]
-    // fn test_fail() -> Result<()> {
-    //     helper("not-the-right-os", false)
-    // }
+    #[test]
+    fn test_fail() -> Result<()> {
+        test_helper("gatekeeper_fail", false)
+    }
 }

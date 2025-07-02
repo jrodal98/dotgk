@@ -1,0 +1,16 @@
+{
+  "groups": [
+    {
+      "type": "os",
+      "args": [
+        {
+          "target": "linux"
+        },
+        {
+          "target": "macos"
+        }
+      ],
+      "condition": "any"
+    }
+  ]
+}
