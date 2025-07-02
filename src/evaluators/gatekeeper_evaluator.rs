@@ -1,11 +1,8 @@
-use anyhow::Context;
 use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::EvaluatorTrait;
-use crate::gatekeeper::evaluate_gatekeeper;
-use crate::gatekeeper::get_gatekeeper_path;
 use crate::gatekeeper::Gatekeeper;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -15,29 +12,23 @@ pub struct GatekeeperEvaluator {
 
 impl EvaluatorTrait for GatekeeperEvaluator {
     fn evaluate(&self) -> Result<bool> {
-        // Get the path to the referenced gatekeeper
-        let gatekeeper_path = get_gatekeeper_path(&self.name, None)
-            .with_context(|| format!("Failed to get path for gatekeeper '{}'", self.name))?;
+        let gk = Gatekeeper::from_name(&self.name)?;
+        gk.evaluate()
+    }
+}
 
-        // Check if the gatekeeper exists
-        if !gatekeeper_path.exists() {
-            return Err(anyhow::anyhow!(
-                "Referenced gatekeeper '{}' not found at {:?}",
-                self.name,
-                gatekeeper_path
-            ));
-        }
+#[cfg(test)]
+mod tests {
+    use crate::gatekeeper::test_helper;
+    use anyhow::Result;
 
-        // Read the gatekeeper content
-        let gatekeeper_content = std::fs::read_to_string(&gatekeeper_path)
-            .with_context(|| format!("Failed to read referenced gatekeeper '{}'", self.name))?;
+    #[test]
+    fn test_pass() -> Result<()> {
+        test_helper("gatekeeper_pass", true)
+    }
 
-        // Parse the gatekeeper
-        let gatekeeper: Gatekeeper = serde_json::from_str(&gatekeeper_content)
-            .with_context(|| format!("Failed to parse referenced gatekeeper '{}'", self.name))?;
-
-        // Evaluate the gatekeeper
-        evaluate_gatekeeper(&gatekeeper)
-            .with_context(|| format!("Failed to evaluate referenced gatekeeper '{}'", self.name))
+    #[test]
+    fn test_fail() -> Result<()> {
+        test_helper("gatekeeper_fail", false)
     }
 }

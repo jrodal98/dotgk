@@ -16,3 +16,19 @@ impl EvaluatorTrait for FileEvaluator {
         Ok(PathBuf::from(&self.path).exists())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::gatekeeper::test_helper;
+    use anyhow::Result;
+
+    #[test]
+    fn test_pass() -> Result<()> {
+        test_helper("file_pass", true)
+    }
+
+    #[test]
+    fn test_fail() -> Result<()> {
+        test_helper("file_fail", false)
+    }
+}

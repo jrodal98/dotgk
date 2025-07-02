@@ -1,49 +1,68 @@
+mod cache;
 mod cli;
 mod evaluators;
 mod gatekeeper;
-use anyhow::Context;
+
+use crate::gatekeeper::Gatekeeper;
 use anyhow::Result;
 use clap::Parser;
 use cli::Args;
 use cli::Command;
-use gatekeeper::evaluate_gatekeeper;
-use gatekeeper::get_gatekeeper_path;
-use gatekeeper::Gatekeeper;
 use tracing::debug;
-use tracing::error;
 use tracing::info;
 use tracing::instrument;
 
-fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-    let args = Args::parse();
-    match args.command {
-        Command::Evaluate { name } => evaluate_command(name),
-    }
-}
-
 #[instrument]
-fn evaluate_command(name: String) -> Result<()> {
+fn evaluate_command(
+    name: String,
+    cache_path: Option<std::path::PathBuf>,
+    no_cache: bool,
+) -> Result<()> {
     info!("Evaluating gatekeeper: {}", name);
-    let gatekeeper_path = get_gatekeeper_path(&name, None)
-        .with_context(|| format!("Failed to get gatekeeper path for '{}'", name))?;
-    debug!("Gatekeeper path: {:?}", gatekeeper_path);
 
-    if !gatekeeper_path.exists() {
-        error!("Gatekeeper '{}' not found at {:?}", name, gatekeeper_path);
-        anyhow::bail!("Gatekeeper '{}' not found at {:?}", name, gatekeeper_path);
-    }
-
-    let gatekeeper_content = std::fs::read_to_string(&gatekeeper_path)
-        .with_context(|| format!("Failed to read gatekeeper '{}'", name))?;
-    debug!("Gatekeeper content read successfully");
-
-    let gatekeeper: Gatekeeper = serde_json::from_str(&gatekeeper_content)
-        .with_context(|| format!("Failed to parse gatekeeper '{}'", name))?;
-    debug!("Gatekeeper parsed successfully");
-
-    let result = evaluate_gatekeeper(&gatekeeper)?;
+    let gatekeeper = Gatekeeper::from_name(&name)?;
+    let result = gatekeeper.evaluate()?;
     info!("Evaluation result: {}", result);
     println!("{}", result);
+
+    // Cache the result unless --no-cache is specified
+    if !no_cache {
+        let ttl = gatekeeper.ttl;
+
+        if let Err(e) = cache::cache_result_with_ttl(
+            &name,
+            result,
+            cache_path,
+            cache::UpdateType::Evaluate,
+            ttl,
+        ) {
+            // Don't fail the command if caching fails, just log the error
+            tracing::warn!("Failed to cache evaluation result: {}", e);
+        }
+    }
+
     Ok(())
+}
+
+fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let args = Args::parse();
+    debug!("Parsed args: {:?}", args);
+
+    match args.command {
+        Command::Evaluate {
+            name,
+            cache_path,
+            no_cache,
+        } => evaluate_command(name, cache_path, no_cache),
+        Command::Get { name, cache_path } => cache::get_command(name, cache_path),
+        Command::Set {
+            name,
+            value,
+            cache_path,
+            ttl,
+        } => cache::set_command(name, value, cache_path, ttl),
+        Command::Sync { cache_path, force } => cache::sync_command(cache_path, force),
+    }
 }

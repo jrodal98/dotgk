@@ -1,0 +1,11 @@
+{
+  "groups": [
+    {
+      "type": "hostname",
+      "args": {
+        "target": "not-test-hostname"
+      },
+      "condition": "eq"
+    }
+  ]
+}
