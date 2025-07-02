@@ -19,6 +19,13 @@ pub enum Command {
         #[clap(long)]
         no_cache: bool,
     },
+    /// Get a gatekeeper value from cache, evaluating if expired or missing
+    Get {
+        name: String,
+        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
+        #[clap(long)]
+        cache_path: Option<std::path::PathBuf>,
+    },
     /// Set a value in the cache
     Set {
         name: String,

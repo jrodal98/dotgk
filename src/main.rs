@@ -58,6 +58,7 @@ fn main() -> Result<()> {
             cache_path,
             no_cache,
         } => evaluate_command(name, cache_path, no_cache),
+        Command::Get { name, cache_path } => cache::get_command(name, cache_path),
         Command::Set {
             name,
             value,

@@ -139,6 +139,55 @@ pub fn set_command(
 }
 
 #[instrument]
+pub fn get_command(name: String, cache_path: Option<PathBuf>) -> Result<()> {
+    info!("Getting gatekeeper value: {}", name);
+
+    let cache_file_path = get_cache_path(cache_path.clone())?;
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("Failed to get current timestamp")?
+        .as_secs();
+
+    // Try to load from cache first
+    if cache_file_path.exists() {
+        let cache_content =
+            fs::read_to_string(&cache_file_path).context("Failed to read cache file")?;
+
+        if let Ok(cache) = serde_json::from_str::<Cache>(&cache_content) {
+            if let Some(entry) = cache.cache.get(&name) {
+                if !is_cache_entry_expired(entry, current_timestamp) {
+                    info!("Found valid cache entry for '{}': {}", name, entry.value);
+                    println!("{}", entry.value);
+                    return Ok(());
+                } else {
+                    info!("Cache entry for '{}' has expired, re-evaluating", name);
+                }
+            } else {
+                info!("No cache entry found for '{}', evaluating", name);
+            }
+        }
+    } else {
+        info!("No cache file found, evaluating '{}'", name);
+    }
+
+    // Cache miss or expired - evaluate and cache
+    let result = evaluate_gatekeeper_by_name(&name)?;
+    info!("Evaluation result: {}", result);
+    println!("{}", result);
+
+    // Load gatekeeper to get TTL configuration and cache the result
+    let gatekeeper = load_gatekeeper(&name)?;
+    let ttl = gatekeeper.ttl;
+
+    if let Err(e) = cache_result_with_ttl(&name, result, cache_path, UpdateType::Evaluate, ttl) {
+        // Don't fail the command if caching fails, just log the error
+        tracing::warn!("Failed to cache evaluation result: {}", e);
+    }
+
+    Ok(())
+}
+
+#[instrument]
 pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
     info!("Syncing all gatekeepers (force: {})", force);
 
