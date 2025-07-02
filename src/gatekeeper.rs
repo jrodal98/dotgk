@@ -68,6 +68,14 @@ pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> Result<bool> {
     Ok(gatekeeper.on_no_match)
 }
 
+impl Gatekeeper {
+    pub fn evaluate_from_json(json: &str) -> Result<bool> {
+        let gatekeeper: Gatekeeper = serde_json::from_str(json)
+            .with_context(|| format!("Failed to parse gatekeeper from json '{}'", json))?;
+        evaluate_gatekeeper(&gatekeeper)
+    }
+}
+
 pub fn evaluate_gatekeeper_by_name(name: &str) -> Result<bool> {
     let gatekeeper_path = get_gatekeeper_path(name, None)
         .with_context(|| format!("Failed to get gatekeeper path for '{}'", name))?;

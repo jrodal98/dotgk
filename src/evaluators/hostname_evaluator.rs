@@ -19,3 +19,55 @@ impl EvaluatorTrait for HostnameEvaluator {
         Ok(self.target == hostname_str)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gatekeeper::Gatekeeper;
+
+    #[test]
+    fn test_pass() -> Result<()> {
+        // Example JSON for a hostname gatekeeper
+        let json = format!(r#"
+        {{
+            "groups": [
+                {{
+                    "type": "hostname",
+                    "args": {{
+                        "target": "{}"
+                    }},
+                    "condition": "eq"
+                }}
+            ]
+        }}
+        "#, hostname::get().context("Failed to get hostname")?.to_str().context("Failed to convert hostname to string")?);
+
+        let result = Gatekeeper::evaluate_from_json(&json)?;
+
+        assert!(result);
+        Ok(())
+    }
+
+    #[test]
+    fn test_fail() -> Result<()> {
+        // Example JSON for a hostname gatekeeper
+        let json = format!(r#"
+        {{
+            "groups": [
+                {{
+                    "type": "hostname",
+                    "args": {{
+                        "target": "{}"
+                    }},
+                    "condition": "eq"
+                }}
+            ]
+        }}
+        "#, "hopefullynotarealhostname");
+
+        let result = Gatekeeper::evaluate_from_json(&json)?;
+
+        assert!(!result);
+        Ok(())
+    }
+}
