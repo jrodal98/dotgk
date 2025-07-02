@@ -86,6 +86,38 @@ impl<T> IntoIterator for OneOrMany<T> {
     }
 }
 
+macro_rules! impl_evaluator_methods {
+    ($enum_type:ident, $($variant:ident),+) => {
+        impl $enum_type {
+            fn match_eq(&self) -> Result<bool> {
+                match self {
+                    $(Self::$variant(v) => v.match_eq(),)+
+                }
+            }
+            fn match_neq(&self) -> Result<bool> {
+                match self {
+                    $(Self::$variant(v) => v.match_neq(),)+
+                }
+            }
+            fn match_any(&self) -> Result<bool> {
+                match self {
+                    $(Self::$variant(v) => v.match_any(),)+
+                }
+            }
+            fn match_all(&self) -> Result<bool> {
+                match self {
+                    $(Self::$variant(v) => v.match_all(),)+
+                }
+            }
+            fn match_none(&self) -> Result<bool> {
+                match self {
+                    $(Self::$variant(v) => v.match_none(),)+
+                }
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase", tag = "type", content = "args")]
 pub enum EvaluatorType {
@@ -95,52 +127,14 @@ pub enum EvaluatorType {
     Os(OneOrMany<OSEvaluator>),
 }
 
-impl EvaluatorType {
-    fn match_eq(&self) -> Result<bool> {
-        match self {
-            EvaluatorType::File(v) => v.match_eq(),
-            EvaluatorType::Hostname(v) => v.match_eq(),
-            EvaluatorType::Gatekeeper(v) => v.match_eq(),
-            EvaluatorType::Os(v) => v.match_eq(),
-        }
-    }
-
-    fn match_neq(&self) -> Result<bool> {
-        match self {
-            EvaluatorType::File(v) => v.match_neq(),
-            EvaluatorType::Hostname(v) => v.match_neq(),
-            EvaluatorType::Gatekeeper(v) => v.match_neq(),
-            EvaluatorType::Os(v) => v.match_neq(),
-        }
-    }
-
-    fn match_any(&self) -> Result<bool> {
-        match self {
-            EvaluatorType::File(v) => v.match_any(),
-            EvaluatorType::Hostname(v) => v.match_any(),
-            EvaluatorType::Gatekeeper(v) => v.match_any(),
-            EvaluatorType::Os(v) => v.match_any(),
-        }
-    }
-
-    fn match_all(&self) -> Result<bool> {
-        match self {
-            EvaluatorType::File(v) => v.match_all(),
-            EvaluatorType::Hostname(v) => v.match_all(),
-            EvaluatorType::Gatekeeper(v) => v.match_all(),
-            EvaluatorType::Os(v) => v.match_all(),
-        }
-    }
-
-    fn match_none(&self) -> Result<bool> {
-        match self {
-            EvaluatorType::File(v) => v.match_none(),
-            EvaluatorType::Hostname(v) => v.match_none(),
-            EvaluatorType::Gatekeeper(v) => v.match_none(),
-            EvaluatorType::Os(v) => v.match_none(),
-        }
-    }
-}
+// Use the macro for your enum:
+impl_evaluator_methods!(
+    EvaluatorType,
+    Hostname,
+    File,
+    Gatekeeper,
+    Os
+);
 
 impl Evaluator {
     pub fn evaluate(&self) -> Result<bool> {
