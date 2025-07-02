@@ -11,15 +11,13 @@ pub struct HostnameEvaluator {
 }
 
 impl EvaluatorTrait for HostnameEvaluator {
-    #[cfg(test)]
     fn evaluate(&self) -> Result<bool> {
-        let hostname_str = "test-hostname";
-        return Ok(self.target == hostname_str);
-    }
+        let hostname = if cfg!(test) {
+            "test-hostname".into()
+        } else {
+            hostname::get().context("Failed to get hostname")?
+        };
 
-    #[cfg(not(test))]
-    fn evaluate(&self) -> Result<bool> {
-        let hostname = hostname::get().context("Failed to get hostname")?;
         let hostname_str = hostname
             .to_str()
             .context("Failed to convert hostname to string")?;
