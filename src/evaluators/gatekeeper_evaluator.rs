@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::EvaluatorTrait;
-use crate::gatekeeper::evaluate_gatekeeper_by_name;
+use crate::gatekeeper::Gatekeeper;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GatekeeperEvaluator {
@@ -12,6 +12,7 @@ pub struct GatekeeperEvaluator {
 
 impl EvaluatorTrait for GatekeeperEvaluator {
     fn evaluate(&self) -> Result<bool> {
-        evaluate_gatekeeper_by_name(&self.name)
+        let gk = Gatekeeper::from_name(&self.name)?;
+        gk.evaluate()
     }
 }

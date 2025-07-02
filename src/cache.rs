@@ -13,10 +13,9 @@ use tracing::error;
 use tracing::info;
 use tracing::instrument;
 
-use crate::gatekeeper::evaluate_gatekeeper_by_name;
+use crate::gatekeeper::Gatekeeper;
 use crate::gatekeeper::find_all_gatekeepers;
 use crate::gatekeeper::get_config_dir;
-use crate::gatekeeper::load_gatekeeper;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
@@ -171,15 +170,12 @@ pub fn get_command(name: String, cache_path: Option<PathBuf>) -> Result<()> {
     }
 
     // Cache miss or expired - evaluate and cache
-    let result = evaluate_gatekeeper_by_name(&name)?;
+    let gk = Gatekeeper::from_name(&name)?;
+    let result = gk.evaluate().context("Failed to evaluate gatekeeper")?;
     info!("Evaluation result: {}", result);
     println!("{}", result);
 
-    // Load gatekeeper to get TTL configuration and cache the result
-    let gatekeeper = load_gatekeeper(&name)?;
-    let ttl = gatekeeper.ttl;
-
-    if let Err(e) = cache_result_with_ttl(&name, result, cache_path, UpdateType::Evaluate, ttl) {
+    if let Err(e) = cache_result_with_ttl(&name, result, cache_path, UpdateType::Evaluate, gk.ttl) {
         // Don't fail the command if caching fails, just log the error
         tracing::warn!("Failed to cache evaluation result: {}", e);
     }
@@ -245,10 +241,9 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
 
         if should_evaluate {
             info!("Evaluating gatekeeper: {}", name);
-            match evaluate_gatekeeper_by_name(&name) {
+            let gatekeeper = Gatekeeper::from_name(&name)?;
+            match gatekeeper.evaluate() {
                 Ok(result) => {
-                    // Load gatekeeper to get TTL configuration
-                    let gatekeeper = load_gatekeeper(&name)?;
                     let expires_at = gatekeeper.ttl.map(|ttl| current_timestamp + ttl);
 
                     let entry = CacheEntry {

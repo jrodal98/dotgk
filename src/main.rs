@@ -7,8 +7,7 @@ use anyhow::Result;
 use clap::Parser;
 use cli::Args;
 use cli::Command;
-use gatekeeper::evaluate_gatekeeper_by_name;
-use gatekeeper::load_gatekeeper;
+use crate::gatekeeper::Gatekeeper;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
@@ -21,14 +20,13 @@ fn evaluate_command(
 ) -> Result<()> {
     info!("Evaluating gatekeeper: {}", name);
 
-    let result = evaluate_gatekeeper_by_name(&name)?;
+    let gatekeeper = Gatekeeper::from_name(&name)?;
+    let result = gatekeeper.evaluate()?;
     info!("Evaluation result: {}", result);
     println!("{}", result);
 
     // Cache the result unless --no-cache is specified
     if !no_cache {
-        // Load gatekeeper to get TTL configuration
-        let gatekeeper = load_gatekeeper(&name)?;
         let ttl = gatekeeper.ttl;
 
         if let Err(e) = cache::cache_result_with_ttl(

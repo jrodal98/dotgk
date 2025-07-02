@@ -11,19 +11,21 @@ pub struct HostnameEvaluator {
 }
 
 impl EvaluatorTrait for HostnameEvaluator {
+    #[cfg(test)]
     fn evaluate(&self) -> Result<bool> {
-        #[cfg(test)]
-        {
-            let hostname_str = "test-hostname";
-            return Ok(self.target == hostname_str);
-        }
+        let hostname_str = "test-hostname";
+        return Ok(self.target == hostname_str);
+    }
 
+    #[cfg(not(test))]
+    fn evaluate(&self) -> Result<bool> {
         let hostname = hostname::get().context("Failed to get hostname")?;
         let hostname_str = hostname
             .to_str()
             .context("Failed to convert hostname to string")?;
         Ok(self.target == hostname_str)
     }
+
 }
 
 
@@ -32,8 +34,8 @@ mod tests {
     use crate::gatekeeper::Gatekeeper;
     use anyhow::Result;
 
-    fn make_hostname_gatekeeper_json(target: &str) -> String {
-        serde_json::json!({
+    fn get_gk(target: &str) -> Result<Gatekeeper> {
+        let gk_json = serde_json::json!({
             "groups": [
                 {
                     "type": "hostname",
@@ -43,21 +45,22 @@ mod tests {
                     "condition": "eq"
                 }
             ]
-        }).to_string()
+        }).to_string();
+        Gatekeeper::from_json(&gk_json)
     }
 
     #[test]
     fn test_pass() -> Result<()> {
-        let json = make_hostname_gatekeeper_json("test-hostname");
-        let result = Gatekeeper::evaluate_from_json(&json)?;
+        let gk = get_gk("test-hostname")?;
+        let result = gk.evaluate()?;
         assert!(result);
         Ok(())
     }
 
     #[test]
     fn test_fail() -> Result<()> {
-        let json = make_hostname_gatekeeper_json("not-the-hostname");
-        let result = Gatekeeper::evaluate_from_json(&json)?;
+        let gk = get_gk("not-test-hostname")?;
+        let result = gk.evaluate()?;
         assert!(!result);
         Ok(())
     }
