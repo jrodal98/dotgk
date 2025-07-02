@@ -1,11 +1,13 @@
 mod file_evaluator;
 mod gatekeeper_evaluator;
 mod hostname_evaluator;
+mod os_evaluator;
 
 use anyhow::Result;
 pub use file_evaluator::FileEvaluator;
 pub use gatekeeper_evaluator::GatekeeperEvaluator;
 pub use hostname_evaluator::HostnameEvaluator;
+pub use os_evaluator::OSEvaluator;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -90,6 +92,7 @@ pub enum EvaluatorType {
     Hostname(OneOrMany<HostnameEvaluator>),
     File(OneOrMany<FileEvaluator>),
     Gatekeeper(OneOrMany<GatekeeperEvaluator>),
+    Os(OneOrMany<OSEvaluator>),
 }
 
 impl EvaluatorType {
@@ -98,6 +101,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_eq(),
             EvaluatorType::Hostname(v) => v.match_eq(),
             EvaluatorType::Gatekeeper(v) => v.match_eq(),
+            EvaluatorType::Os(v) => v.match_eq(),
         }
     }
 
@@ -106,6 +110,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_neq(),
             EvaluatorType::Hostname(v) => v.match_neq(),
             EvaluatorType::Gatekeeper(v) => v.match_neq(),
+            EvaluatorType::Os(v) => v.match_eq(),
         }
     }
 
@@ -114,6 +119,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_any(),
             EvaluatorType::Hostname(v) => v.match_any(),
             EvaluatorType::Gatekeeper(v) => v.match_any(),
+            EvaluatorType::Os(v) => v.match_eq(),
         }
     }
 
@@ -122,6 +128,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_all(),
             EvaluatorType::Hostname(v) => v.match_all(),
             EvaluatorType::Gatekeeper(v) => v.match_all(),
+            EvaluatorType::Os(v) => v.match_eq(),
         }
     }
 
@@ -130,6 +137,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_none(),
             EvaluatorType::Hostname(v) => v.match_none(),
             EvaluatorType::Gatekeeper(v) => v.match_none(),
+            EvaluatorType::Os(v) => v.match_eq(),
         }
     }
 }
