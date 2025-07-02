@@ -1,6 +1,7 @@
 mod cli;
 mod evaluators;
 mod gatekeeper;
+
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
@@ -13,14 +14,6 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::instrument;
-
-fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-    let args = Args::parse();
-    match args.command {
-        Command::Evaluate { name } => evaluate_command(name),
-    }
-}
 
 #[instrument]
 fn evaluate_command(name: String) -> Result<()> {
@@ -46,4 +39,16 @@ fn evaluate_command(name: String) -> Result<()> {
     info!("Evaluation result: {}", result);
     println!("{}", result);
     Ok(())
+}
+
+fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let args = Args::parse();
+    debug!("Parsed args: {:?}", args);
+
+    match args.command {
+        Command::Evaluate { name } => evaluate_command(name),
+        Command::Sync { cache_path } => cache::sync_command(cache_path),
+    }
 }

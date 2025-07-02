@@ -8,6 +8,14 @@ use serde::Serialize;
 
 use crate::evaluators::Evaluator;
 
+pub fn get_config_dir() -> Result<std::path::PathBuf> {
+    if let Ok(env_path) = env::var("DOTGK_CONFIG_DIR") {
+        Ok(std::path::PathBuf::from(env_path))
+    } else {
+        config_dir().context("Failed to get config directory")
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Gatekeeper {
     pub groups: Vec<Group>,
@@ -37,10 +45,8 @@ pub fn get_gatekeeper_path(
 ) -> Result<std::path::PathBuf> {
     let mut config_dir = if let Some(path) = config_path {
         path
-    } else if let Ok(env_path) = env::var("DOTGK_CONFIG_DIR") {
-        std::path::PathBuf::from(env_path)
     } else {
-        config_dir().context("Failed to get config directory")?
+        get_config_dir()?
     };
     config_dir.push("dotgk");
     config_dir.push(format!("{}.json", name));
@@ -57,4 +63,46 @@ pub fn evaluate_gatekeeper(gatekeeper: &Gatekeeper) -> Result<bool> {
         }
     }
     Ok(gatekeeper.on_no_match)
+}
+
+pub fn evaluate_gatekeeper_by_name(name: &str) -> Result<bool> {
+    let gatekeeper_path = get_gatekeeper_path(name, None)
+        .with_context(|| format!("Failed to get gatekeeper path for '{}'", name))?;
+
+    if !gatekeeper_path.exists() {
+        anyhow::bail!("Gatekeeper '{}' not found at {:?}", name, gatekeeper_path);
+    }
+
+    let gatekeeper_content = std::fs::read_to_string(&gatekeeper_path)
+        .with_context(|| format!("Failed to read gatekeeper '{}'", name))?;
+
+    let gatekeeper: Gatekeeper = serde_json::from_str(&gatekeeper_content)
+        .with_context(|| format!("Failed to parse gatekeeper '{}'", name))?;
+
+    evaluate_gatekeeper(&gatekeeper)
+}
+
+pub fn find_all_gatekeepers() -> Result<Vec<String>> {
+    let config_dir = get_config_dir()?;
+    let dotgk_dir = config_dir.join("dotgk");
+
+    if !dotgk_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut gatekeepers = Vec::new();
+    for entry in std::fs::read_dir(&dotgk_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+            if let Some(stem) = path.file_stem() {
+                if let Some(name) = stem.to_str() {
+                    if name != "cache" {
+                        gatekeepers.push(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    Ok(gatekeepers)
 }

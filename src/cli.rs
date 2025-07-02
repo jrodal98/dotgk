@@ -11,4 +11,10 @@ pub struct Args {
 pub enum Command {
     /// Evaluate a gatekeeper
     Evaluate { name: String },
+    /// Sync all gatekeepers and cache results
+    Sync {
+        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
+        #[clap(long)]
+        cache_path: Option<std::path::PathBuf>,
+    },
 }
