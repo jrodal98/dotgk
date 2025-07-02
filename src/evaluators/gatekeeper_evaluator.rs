@@ -4,9 +4,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::EvaluatorTrait;
-use crate::gatekeeper::Gatekeeper;
 use crate::gatekeeper::evaluate_gatekeeper;
 use crate::gatekeeper::get_gatekeeper_path;
+use crate::gatekeeper::Gatekeeper;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GatekeeperEvaluator {
