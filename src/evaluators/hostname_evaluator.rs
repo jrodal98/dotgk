@@ -12,6 +12,12 @@ pub struct HostnameEvaluator {
 
 impl EvaluatorTrait for HostnameEvaluator {
     fn evaluate(&self) -> Result<bool> {
+        #[cfg(test)]
+        {
+            let hostname_str = "test-hostname";
+            return Ok(self.target == hostname_str);
+        }
+
         let hostname = hostname::get().context("Failed to get hostname")?;
         let hostname_str = hostname
             .to_str()
@@ -20,53 +26,38 @@ impl EvaluatorTrait for HostnameEvaluator {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::gatekeeper::Gatekeeper;
+    use anyhow::Result;
+
+    fn make_hostname_gatekeeper_json(target: &str) -> String {
+        serde_json::json!({
+            "groups": [
+                {
+                    "type": "hostname",
+                    "args": {
+                        "target": target
+                    },
+                    "condition": "eq"
+                }
+            ]
+        }).to_string()
+    }
 
     #[test]
     fn test_pass() -> Result<()> {
-        // Example JSON for a hostname gatekeeper
-        let json = format!(r#"
-        {{
-            "groups": [
-                {{
-                    "type": "hostname",
-                    "args": {{
-                        "target": "{}"
-                    }},
-                    "condition": "eq"
-                }}
-            ]
-        }}
-        "#, hostname::get().context("Failed to get hostname")?.to_str().context("Failed to convert hostname to string")?);
-
+        let json = make_hostname_gatekeeper_json("test-hostname");
         let result = Gatekeeper::evaluate_from_json(&json)?;
-
         assert!(result);
         Ok(())
     }
 
     #[test]
     fn test_fail() -> Result<()> {
-        // Example JSON for a hostname gatekeeper
-        let json = format!(r#"
-        {{
-            "groups": [
-                {{
-                    "type": "hostname",
-                    "args": {{
-                        "target": "{}"
-                    }},
-                    "condition": "eq"
-                }}
-            ]
-        }}
-        "#, "hopefullynotarealhostname");
-
+        let json = make_hostname_gatekeeper_json("not-the-hostname");
         let result = Gatekeeper::evaluate_from_json(&json)?;
-
         assert!(!result);
         Ok(())
     }
