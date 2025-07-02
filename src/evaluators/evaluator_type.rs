@@ -1,12 +1,12 @@
+use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
-use anyhow::Result;
 
+pub use super::OneOrMany;
 pub use super::file_evaluator::FileEvaluator;
 pub use super::gatekeeper_evaluator::GatekeeperEvaluator;
 pub use super::hostname_evaluator::HostnameEvaluator;
 pub use super::os_evaluator::OSEvaluator;
-pub use super::OneOrMany;
 
 macro_rules! evaluator_enum_and_impl {
     (

@@ -1,8 +1,8 @@
+mod evaluator_type;
 mod file_evaluator;
 mod gatekeeper_evaluator;
 mod hostname_evaluator;
 mod os_evaluator;
-mod evaluator_type;
 
 use anyhow::Result;
 use evaluator_type::EvaluatorType;

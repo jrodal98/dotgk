@@ -22,7 +22,6 @@ mod tests {
     use crate::gatekeeper::test_helper;
     use anyhow::Result;
 
-
     #[test]
     fn test_pass() -> Result<()> {
         test_helper("file_pass", true)

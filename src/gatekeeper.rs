@@ -53,18 +53,14 @@ fn default_true() -> bool {
     true
 }
 
-pub fn get_gatekeeper_path(
-    name: &str,
-) -> Result<std::path::PathBuf> {
+pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
     let mut config_dir = get_config_dir()?;
     config_dir.push("dotgk");
     config_dir.push(format!("{}.json", name));
     Ok(config_dir)
 }
 
-
 impl Gatekeeper {
-
     pub fn evaluate(&self) -> Result<bool> {
         for group in self.groups.iter() {
             let is_match = group.evaluator.evaluate()?;
@@ -100,7 +96,6 @@ impl Gatekeeper {
         Ok(gatekeeper)
     }
 }
-
 
 pub fn find_all_gatekeepers() -> Result<Vec<String>> {
     let config_dir = get_config_dir()?;

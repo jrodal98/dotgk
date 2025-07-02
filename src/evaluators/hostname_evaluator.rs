@@ -1,9 +1,9 @@
+use super::EvaluatorTrait;
 use anyhow::Context;
 use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 use std::ffi::OsString;
-use super::EvaluatorTrait;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HostnameEvaluator {
@@ -19,7 +19,7 @@ impl HostnameEvaluator {
 
     #[cfg(test)]
     fn get_hostname() -> Result<OsString> {
-        Ok("test-hostname".into())    
+        Ok("test-hostname".into())
     }
 }
 
@@ -32,7 +32,6 @@ impl EvaluatorTrait for HostnameEvaluator {
         Ok(self.target == hostname_str)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

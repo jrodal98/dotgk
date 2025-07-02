@@ -23,11 +23,11 @@ mod tests {
     use anyhow::Result;
 
     #[cfg(target_os = "linux")]
-    const OS : &str = "linux";
+    const OS: &str = "linux";
     #[cfg(target_os = "macos")]
-    const OS : &str = "macos";
+    const OS: &str = "macos";
     #[cfg(target_os = "windows")]
-    const OS : &str = "windows";
+    const OS: &str = "windows";
 
     #[test]
     fn test_pass() -> Result<()> {

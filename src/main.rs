@@ -3,11 +3,11 @@ mod cli;
 mod evaluators;
 mod gatekeeper;
 
+use crate::gatekeeper::Gatekeeper;
 use anyhow::Result;
 use clap::Parser;
 use cli::Args;
 use cli::Command;
-use crate::gatekeeper::Gatekeeper;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
