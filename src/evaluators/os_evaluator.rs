@@ -19,23 +19,44 @@ impl EvaluatorTrait for OSEvaluator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::gatekeeper::Gatekeeper;
+    use anyhow::Result;
+
+    #[cfg(target_os = "linux")]
+    const OS : &str = "linux";
+    #[cfg(target_os = "macos")]
+    const OS : &str = "macos";
+    #[cfg(target_os = "windows")]
+    const OS : &str = "windows";
+
+    fn get_gk(target: &str) -> Result<Gatekeeper> {
+        let gk_json = serde_json::json!({
+            "groups": [
+                {
+                    "type": "os",
+                    "args": {
+                        "target": target
+                    },
+                    "condition": "eq"
+                }
+            ]
+        }).to_string();
+        Gatekeeper::from_json(&gk_json)
+    }
 
     #[test]
-    fn test_os_evaluator() {
-        let os = if cfg!(target_os = "windows") {
-            "windows"
-        } else if cfg!(target_os = "macos") {
-            "macos"
-        } else if cfg!(target_os = "linux") {
-            "linux"
-        } else {
-            return;
-        };
+    fn test_pass() -> Result<()> {
+        let gk = get_gk(OS)?;
+        let result = gk.evaluate()?;
+        assert!(result);
+        Ok(())
+    }
 
-        let evaluator = OSEvaluator {
-            target: os.to_string(),
-        };
-        assert!(evaluator.evaluate().unwrap());
+    #[test]
+    fn test_fail() -> Result<()> {
+        let gk = get_gk("wrongos")?;
+        let result = gk.evaluate()?;
+        assert!(!result);
+        Ok(())
     }
 }
