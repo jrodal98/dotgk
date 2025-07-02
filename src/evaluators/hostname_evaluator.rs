@@ -39,23 +39,8 @@ mod tests {
     use crate::gatekeeper::Gatekeeper;
     use anyhow::Result;
 
-    fn get_gk(target: &str) -> Result<Gatekeeper> {
-        let gk_json = serde_json::json!({
-            "groups": [
-                {
-                    "type": "hostname",
-                    "args": {
-                        "target": target
-                    },
-                    "condition": "eq"
-                }
-            ]
-        }).to_string();
-        Gatekeeper::from_json(&gk_json)
-    }
-
     fn helper(target: &str, expected: bool) -> Result<()> {
-        let gk = get_gk(target)?;
+        let gk = Gatekeeper::from_name(target)?;
         let result = gk.evaluate()?;
         assert_eq!(result, expected);
         Ok(())
@@ -63,11 +48,11 @@ mod tests {
 
     #[test]
     fn test_pass() -> Result<()> {
-        helper("test-hostname", true)
+        helper("hostname_pass", true)
     }
 
     #[test]
     fn test_fail() -> Result<()> {
-        helper("not-test-hostname", false)
+        helper("hostname_fail", false)
     }
 }

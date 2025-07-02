@@ -8,12 +8,18 @@ use serde::Serialize;
 
 use crate::evaluators::Evaluator;
 
+#[cfg(not(test))]
 pub fn get_config_dir() -> Result<std::path::PathBuf> {
     if let Ok(env_path) = env::var("DOTGK_CONFIG_DIR") {
         Ok(std::path::PathBuf::from(env_path))
     } else {
         config_dir().context("Failed to get config directory")
     }
+}
+
+#[cfg(test)]
+pub fn get_config_dir() -> Result<std::path::PathBuf> {
+    Ok(std::path::PathBuf::from("examples"))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
