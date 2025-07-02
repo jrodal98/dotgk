@@ -36,23 +36,16 @@ impl EvaluatorTrait for HostnameEvaluator {
 
 #[cfg(test)]
 mod tests {
-    use crate::gatekeeper::Gatekeeper;
+    use crate::gatekeeper::test_helper;
     use anyhow::Result;
-
-    fn helper(target: &str, expected: bool) -> Result<()> {
-        let gk = Gatekeeper::from_name(target)?;
-        let result = gk.evaluate()?;
-        assert_eq!(result, expected);
-        Ok(())
-    }
 
     #[test]
     fn test_pass() -> Result<()> {
-        helper("hostname_pass", true)
+        test_helper("hostname_pass", true)
     }
 
     #[test]
     fn test_fail() -> Result<()> {
-        helper("hostname_fail", false)
+        test_helper("hostname_fail", false)
     }
 }

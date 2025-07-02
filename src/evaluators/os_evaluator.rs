@@ -19,7 +19,7 @@ impl EvaluatorTrait for OSEvaluator {
 
 #[cfg(test)]
 mod tests {
-    use crate::gatekeeper::Gatekeeper;
+    use crate::gatekeeper::test_helper;
     use anyhow::Result;
 
     #[cfg(target_os = "linux")]
@@ -29,35 +29,29 @@ mod tests {
     #[cfg(target_os = "windows")]
     const OS : &str = "windows";
 
-    fn get_gk(target: &str) -> Result<Gatekeeper> {
-        let gk_json = serde_json::json!({
-            "groups": [
-                {
-                    "type": "os",
-                    "args": {
-                        "target": target
-                    },
-                    "condition": "eq"
-                }
-            ]
-        }).to_string();
-        Gatekeeper::from_json(&gk_json)
-    }
-
-    fn helper(os: &str, expected: bool) -> Result<()> {
-        let gk = get_gk(os)?;
-        let result = gk.evaluate()?;
-        assert_eq!(result, expected);
-        Ok(())
-    }
-
     #[test]
     fn test_pass() -> Result<()> {
-        helper(OS, true)
+        let os = format!("os_{}_pass", OS);
+        test_helper(&os, true)
     }
 
     #[test]
     fn test_fail() -> Result<()> {
-        helper("not-the-right-os", false)
+        match OS {
+            "linux" => test_helper("os_macos_pass", false),
+            "macos" => test_helper("os_windows_pass", false),
+            "windows" => test_helper("os_linux_pass", false),
+            _ => panic!("Unknown OS"),
+        }
+    }
+
+    #[test]
+    fn test_unix() -> Result<()> {
+        match OS {
+            "linux" => test_helper("os_unix_pass", true),
+            "macos" => test_helper("os_unix_pass", true),
+            "windows" => test_helper("os_unix_pass", false),
+            _ => panic!("Unknown OS"),
+        }
     }
 }

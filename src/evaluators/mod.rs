@@ -110,7 +110,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_neq(),
             EvaluatorType::Hostname(v) => v.match_neq(),
             EvaluatorType::Gatekeeper(v) => v.match_neq(),
-            EvaluatorType::Os(v) => v.match_eq(),
+            EvaluatorType::Os(v) => v.match_neq(),
         }
     }
 
@@ -119,7 +119,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_any(),
             EvaluatorType::Hostname(v) => v.match_any(),
             EvaluatorType::Gatekeeper(v) => v.match_any(),
-            EvaluatorType::Os(v) => v.match_eq(),
+            EvaluatorType::Os(v) => v.match_any(),
         }
     }
 
@@ -128,7 +128,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_all(),
             EvaluatorType::Hostname(v) => v.match_all(),
             EvaluatorType::Gatekeeper(v) => v.match_all(),
-            EvaluatorType::Os(v) => v.match_eq(),
+            EvaluatorType::Os(v) => v.match_all(),
         }
     }
 
@@ -137,7 +137,7 @@ impl EvaluatorType {
             EvaluatorType::File(v) => v.match_none(),
             EvaluatorType::Hostname(v) => v.match_none(),
             EvaluatorType::Gatekeeper(v) => v.match_none(),
-            EvaluatorType::Os(v) => v.match_eq(),
+            EvaluatorType::Os(v) => v.match_none(),
         }
     }
 }

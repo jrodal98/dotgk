@@ -22,6 +22,14 @@ pub fn get_config_dir() -> Result<std::path::PathBuf> {
     Ok(std::path::PathBuf::from("examples"))
 }
 
+#[cfg(test)]
+pub fn test_helper(name: &str, expected: bool) -> Result<()> {
+    let gk = Gatekeeper::from_name(name)?;
+    let result = gk.evaluate()?;
+    assert_eq!(result, expected);
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Gatekeeper {
     pub groups: Vec<Group>,
