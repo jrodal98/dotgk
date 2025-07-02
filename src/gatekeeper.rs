@@ -1,8 +1,5 @@
-use std::env;
-
 use anyhow::Context;
 use anyhow::Result;
-use dirs::config_dir;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -10,10 +7,10 @@ use crate::evaluators::Evaluator;
 
 #[cfg(not(test))]
 pub fn get_config_dir() -> Result<std::path::PathBuf> {
-    if let Ok(env_path) = env::var("DOTGK_CONFIG_DIR") {
+    if let Ok(env_path) = std::env::var("DOTGK_CONFIG_DIR") {
         Ok(std::path::PathBuf::from(env_path))
     } else {
-        config_dir().context("Failed to get config directory")
+        dirs::config_dir().context("Failed to get config directory")
     }
 }
 
@@ -58,13 +55,8 @@ fn default_true() -> bool {
 
 pub fn get_gatekeeper_path(
     name: &str,
-    config_path: Option<std::path::PathBuf>,
 ) -> Result<std::path::PathBuf> {
-    let mut config_dir = if let Some(path) = config_path {
-        path
-    } else {
-        get_config_dir()?
-    };
+    let mut config_dir = get_config_dir()?;
     config_dir.push("dotgk");
     config_dir.push(format!("{}.json", name));
     Ok(config_dir)
@@ -92,7 +84,7 @@ impl Gatekeeper {
     }
 
     pub fn from_name(name: &str) -> Result<Gatekeeper> {
-        let gatekeeper_path = get_gatekeeper_path(name, None)
+        let gatekeeper_path = get_gatekeeper_path(name)
             .with_context(|| format!("Failed to get gatekeeper path for '{}'", name))?;
 
         if !gatekeeper_path.exists() {
