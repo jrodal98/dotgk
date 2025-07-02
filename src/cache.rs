@@ -48,6 +48,59 @@ fn get_cache_path(cache_path: Option<PathBuf>) -> Result<PathBuf> {
     Ok(config_dir)
 }
 
+pub fn cache_evaluation_result(
+    name: &str,
+    result: bool,
+    cache_path: Option<PathBuf>,
+    update_type: UpdateType,
+) -> Result<()> {
+    let cache_file_path = get_cache_path(cache_path)?;
+
+    // Create cache directory if it doesn't exist
+    if let Some(parent) = cache_file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("Failed to get current timestamp")?
+        .as_secs();
+
+    // Load existing cache or create new one
+    let mut cache = if cache_file_path.exists() {
+        let cache_content =
+            fs::read_to_string(&cache_file_path).context("Failed to read existing cache file")?;
+        serde_json::from_str::<Cache>(&cache_content)
+            .context("Failed to parse existing cache file")?
+    } else {
+        Cache {
+            cache: HashMap::new(),
+            ts: current_timestamp,
+        }
+    };
+
+    // Update the cache entry
+    let entry = CacheEntry {
+        value: result,
+        ts: current_timestamp,
+        update_type,
+    };
+    cache.cache.insert(name.to_string(), entry);
+    cache.ts = current_timestamp;
+
+    // Write updated cache
+    let cache_json = serde_json::to_string_pretty(&cache).context("Failed to serialize cache")?;
+
+    fs::write(&cache_file_path, cache_json)
+        .with_context(|| format!("Failed to write cache to {:?}", cache_file_path))?;
+
+    debug!(
+        "Cached result for '{}': {} at {:?}",
+        name, result, cache_file_path
+    );
+    Ok(())
+}
+
 #[instrument]
 pub fn sync_command(cache_path: Option<PathBuf>) -> Result<()> {
     info!("Syncing all gatekeepers");
