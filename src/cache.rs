@@ -16,19 +16,23 @@ use tracing::instrument;
 use crate::gatekeeper::evaluate_gatekeeper_by_name;
 use crate::gatekeeper::find_all_gatekeepers;
 use crate::gatekeeper::get_config_dir;
+use crate::gatekeeper::load_gatekeeper;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum UpdateType {
     Evaluate,
     Sync,
+    Set,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CacheEntry {
     pub value: bool,
     pub ts: u64,
     pub update_type: UpdateType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -48,11 +52,12 @@ fn get_cache_path(cache_path: Option<PathBuf>) -> Result<PathBuf> {
     Ok(config_dir)
 }
 
-pub fn cache_evaluation_result(
+pub fn cache_result_with_ttl(
     name: &str,
     result: bool,
     cache_path: Option<PathBuf>,
     update_type: UpdateType,
+    ttl_seconds: Option<u64>,
 ) -> Result<()> {
     let cache_file_path = get_cache_path(cache_path)?;
 
@@ -79,11 +84,15 @@ pub fn cache_evaluation_result(
         }
     };
 
+    // Calculate expiration time if TTL is provided
+    let expires_at = ttl_seconds.map(|ttl| current_timestamp + ttl);
+
     // Update the cache entry
     let entry = CacheEntry {
         value: result,
         ts: current_timestamp,
         update_type,
+        expires_at,
     };
     cache.cache.insert(name.to_string(), entry);
     cache.ts = current_timestamp;
@@ -101,9 +110,37 @@ pub fn cache_evaluation_result(
     Ok(())
 }
 
+fn is_cache_entry_expired(entry: &CacheEntry, current_timestamp: u64) -> bool {
+    if let Some(expires_at) = entry.expires_at {
+        current_timestamp >= expires_at
+    } else {
+        false
+    }
+}
+
 #[instrument]
-pub fn sync_command(cache_path: Option<PathBuf>) -> Result<()> {
-    info!("Syncing all gatekeepers");
+pub fn set_command(
+    name: String,
+    value: bool,
+    cache_path: Option<PathBuf>,
+    ttl_seconds: Option<u64>,
+) -> Result<()> {
+    info!("Setting cache value for '{}': {}", name, value);
+
+    cache_result_with_ttl(&name, value, cache_path, UpdateType::Set, ttl_seconds)?;
+
+    if let Some(ttl) = ttl_seconds {
+        println!("Set '{}' = {} (expires in {} seconds)", name, value, ttl);
+    } else {
+        println!("Set '{}' = {} (no expiration)", name, value);
+    }
+
+    Ok(())
+}
+
+#[instrument]
+pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
+    info!("Syncing all gatekeepers (force: {})", force);
 
     let cache_file_path = get_cache_path(cache_path)?;
     debug!("Cache path: {:?}", cache_file_path);
@@ -113,30 +150,78 @@ pub fn sync_command(cache_path: Option<PathBuf>) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
 
-    let gatekeepers = find_all_gatekeepers()?;
-    info!("Found {} gatekeepers", gatekeepers.len());
-
     let current_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("Failed to get current timestamp")?
         .as_secs();
 
-    let mut cache_entries = HashMap::new();
+    // Load existing cache to preserve non-expired entries
+    let existing_cache = if cache_file_path.exists() {
+        let cache_content =
+            fs::read_to_string(&cache_file_path).context("Failed to read existing cache file")?;
+        serde_json::from_str::<Cache>(&cache_content)
+            .context("Failed to parse existing cache file")?
+    } else {
+        Cache {
+            cache: HashMap::new(),
+            ts: current_timestamp,
+        }
+    };
 
+    let gatekeepers = find_all_gatekeepers()?;
+    info!("Found {} gatekeepers", gatekeepers.len());
+
+    let mut cache_entries = HashMap::new();
+    let mut updated_count = 0;
+    let mut preserved_count = 0;
+    let mut skipped_count = 0;
+
+    // First, preserve non-expired entries that aren't gatekeepers
+    for (name, entry) in existing_cache.cache.iter() {
+        if !gatekeepers.contains(name) && !is_cache_entry_expired(entry, current_timestamp) {
+            cache_entries.insert(name.clone(), entry.clone());
+            preserved_count += 1;
+            debug!("Preserved non-expired entry for '{}'", name);
+        }
+    }
+
+    // Process gatekeepers
     for name in gatekeepers {
-        info!("Evaluating gatekeeper: {}", name);
-        match evaluate_gatekeeper_by_name(&name) {
-            Ok(result) => {
-                let entry = CacheEntry {
-                    value: result,
-                    ts: current_timestamp,
-                    update_type: UpdateType::Sync,
-                };
-                cache_entries.insert(name.clone(), entry);
-                info!("Cached result for '{}': {}", name, result);
+        let existing_entry = existing_cache.cache.get(&name);
+        let should_evaluate = force
+            || existing_entry.is_none()
+            || existing_entry.map_or(false, |entry| {
+                is_cache_entry_expired(entry, current_timestamp)
+            });
+
+        if should_evaluate {
+            info!("Evaluating gatekeeper: {}", name);
+            match evaluate_gatekeeper_by_name(&name) {
+                Ok(result) => {
+                    // Load gatekeeper to get TTL configuration
+                    let gatekeeper = load_gatekeeper(&name)?;
+                    let expires_at = gatekeeper.ttl.map(|ttl| current_timestamp + ttl);
+
+                    let entry = CacheEntry {
+                        value: result,
+                        ts: current_timestamp,
+                        update_type: UpdateType::Sync,
+                        expires_at,
+                    };
+                    cache_entries.insert(name.clone(), entry);
+                    updated_count += 1;
+                    info!("Cached result for '{}': {}", name, result);
+                }
+                Err(e) => {
+                    error!("Failed to evaluate gatekeeper '{}': {}", name, e);
+                }
             }
-            Err(e) => {
-                error!("Failed to evaluate gatekeeper '{}': {}", name, e);
+        } else {
+            // Keep existing entry
+            if let Some(entry) = existing_entry {
+                cache_entries.insert(name.clone(), entry.clone());
+                skipped_count += 1;
+                debug!("Skipped non-expired gatekeeper '{}'", name);
             }
         }
     }
@@ -152,6 +237,16 @@ pub fn sync_command(cache_path: Option<PathBuf>) -> Result<()> {
         .with_context(|| format!("Failed to write cache to {:?}", cache_file_path))?;
 
     info!("Cache written to {:?}", cache_file_path);
-    println!("Synced {} gatekeepers to cache", cache.cache.len());
+    if force {
+        println!(
+            "Force synced {} gatekeepers, preserved {} non-gatekeeper entries",
+            updated_count, preserved_count
+        );
+    } else {
+        println!(
+            "Synced {} gatekeepers, skipped {} non-expired, preserved {} non-gatekeeper entries",
+            updated_count, skipped_count, preserved_count
+        );
+    }
     Ok(())
 }

@@ -21,6 +21,9 @@ pub struct Gatekeeper {
     pub groups: Vec<Group>,
     #[serde(default = "default_false")]
     pub on_no_match: bool,
+    /// Optional TTL in seconds for cache entries created from this gatekeeper
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -80,6 +83,23 @@ pub fn evaluate_gatekeeper_by_name(name: &str) -> Result<bool> {
         .with_context(|| format!("Failed to parse gatekeeper '{}'", name))?;
 
     evaluate_gatekeeper(&gatekeeper)
+}
+
+pub fn load_gatekeeper(name: &str) -> Result<Gatekeeper> {
+    let gatekeeper_path = get_gatekeeper_path(name, None)
+        .with_context(|| format!("Failed to get gatekeeper path for '{}'", name))?;
+
+    if !gatekeeper_path.exists() {
+        anyhow::bail!("Gatekeeper '{}' not found at {:?}", name, gatekeeper_path);
+    }
+
+    let gatekeeper_content = std::fs::read_to_string(&gatekeeper_path)
+        .with_context(|| format!("Failed to read gatekeeper '{}'", name))?;
+
+    let gatekeeper: Gatekeeper = serde_json::from_str(&gatekeeper_content)
+        .with_context(|| format!("Failed to parse gatekeeper '{}'", name))?;
+
+    Ok(gatekeeper)
 }
 
 pub fn find_all_gatekeepers() -> Result<Vec<String>> {
