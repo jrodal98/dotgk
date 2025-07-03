@@ -360,3 +360,292 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::Write;
+    use std::thread;
+    use std::time::Duration;
+
+    use tempfile::TempDir;
+
+    use super::*;
+
+    fn create_test_cache_entry(ts: u64, expires_at: Option<u64>) -> CacheEntry {
+        CacheEntry {
+            value: true,
+            ts,
+            update_type: UpdateType::Evaluate,
+            expires_at,
+        }
+    }
+
+    #[test]
+    fn test_is_cache_entry_expired_no_ttl() {
+        let entry = create_test_cache_entry(1000, None);
+        let current_time = 2000;
+
+        // Entry without TTL should never expire
+        assert!(!is_cache_entry_expired(&entry, current_time));
+    }
+
+    #[test]
+    fn test_is_cache_entry_expired_with_ttl_not_expired() {
+        let entry = create_test_cache_entry(1000, Some(2000));
+        let current_time = 1500;
+
+        // Entry should not be expired if current time < expires_at
+        assert!(!is_cache_entry_expired(&entry, current_time));
+    }
+
+    #[test]
+    fn test_is_cache_entry_expired_with_ttl_expired() {
+        let entry = create_test_cache_entry(1000, Some(1500));
+        let current_time = 2000;
+
+        // Entry should be expired if current time >= expires_at
+        assert!(is_cache_entry_expired(&entry, current_time));
+    }
+
+    #[test]
+    fn test_is_cache_entry_expired_with_ttl_exactly_expired() {
+        let entry = create_test_cache_entry(1000, Some(1500));
+        let current_time = 1500;
+
+        // Entry should be expired if current time == expires_at
+        assert!(is_cache_entry_expired(&entry, current_time));
+    }
+
+    #[test]
+    fn test_get_file_modification_time() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let file_path = temp_dir.path().join("test_file.txt");
+
+        // Create a test file
+        let mut file = File::create(&file_path)?;
+        file.write_all(b"test content")?;
+        file.sync_all()?;
+        drop(file);
+
+        // Get modification time
+        let mod_time = get_file_modification_time(&file_path)?;
+
+        // Should be a reasonable timestamp (after year 2020)
+        assert!(mod_time > 1577836800); // Jan 1, 2020
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_file_modification_time_nonexistent_file() {
+        let nonexistent_path = PathBuf::from("/nonexistent/file.txt");
+        let result = get_file_modification_time(&nonexistent_path);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_gatekeeper_file_modified_file_newer() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let gatekeeper_path = temp_dir.path().join("test.json");
+
+        // Create a gatekeeper file
+        let mut file = File::create(&gatekeeper_path)?;
+        file.write_all(b"{\"groups\": []}")?;
+        file.sync_all()?;
+        drop(file);
+
+        // Wait a bit to ensure different timestamps
+        thread::sleep(Duration::from_millis(10));
+
+        // Create cache entry with older timestamp
+        let old_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() - 10;
+        let cache_entry = create_test_cache_entry(old_timestamp, None);
+
+        // Mock the gatekeeper path function by testing with a direct path check
+        let file_mod_time = get_file_modification_time(&gatekeeper_path)?;
+        let is_modified = file_mod_time > cache_entry.ts;
+
+        assert!(is_modified);
+        Ok(())
+    }
+
+    #[test]
+    fn test_is_gatekeeper_file_modified_file_older() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let gatekeeper_path = temp_dir.path().join("test.json");
+
+        // Create a gatekeeper file
+        let mut file = File::create(&gatekeeper_path)?;
+        file.write_all(b"{\"groups\": []}")?;
+        file.sync_all()?;
+        drop(file);
+
+        // Create cache entry with newer timestamp
+        let new_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + 10;
+        let cache_entry = create_test_cache_entry(new_timestamp, None);
+
+        // Check if file is considered modified
+        let file_mod_time = get_file_modification_time(&gatekeeper_path)?;
+        let is_modified = file_mod_time > cache_entry.ts;
+
+        assert!(!is_modified);
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_result_with_ttl_new_cache() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let cache_path = temp_dir.path().join("cache.json");
+
+        // Cache a result with TTL
+        cache_result_with_ttl(
+            "test_gatekeeper",
+            true,
+            Some(cache_path.clone()),
+            UpdateType::Evaluate,
+            Some(3600), // 1 hour TTL
+        )?;
+
+        // Verify cache file was created and contains expected data
+        assert!(cache_path.exists());
+
+        let cache_content = fs::read_to_string(&cache_path)?;
+        let cache: Cache = serde_json::from_str(&cache_content)?;
+
+        assert!(cache.cache.contains_key("test_gatekeeper"));
+        let entry = &cache.cache["test_gatekeeper"];
+        assert_eq!(entry.value, true);
+        assert!(entry.expires_at.is_some());
+        assert!(entry.expires_at.unwrap() > entry.ts);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_result_with_ttl_no_ttl() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let cache_path = temp_dir.path().join("cache.json");
+
+        // Cache a result without TTL
+        cache_result_with_ttl(
+            "test_gatekeeper",
+            false,
+            Some(cache_path.clone()),
+            UpdateType::Set,
+            None,
+        )?;
+
+        // Verify cache file was created and contains expected data
+        let cache_content = fs::read_to_string(&cache_path)?;
+        let cache: Cache = serde_json::from_str(&cache_content)?;
+
+        let entry = &cache.cache["test_gatekeeper"];
+        assert_eq!(entry.value, false);
+        assert!(entry.expires_at.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_result_with_ttl_update_existing() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let cache_path = temp_dir.path().join("cache.json");
+
+        // Create initial cache entry
+        cache_result_with_ttl(
+            "test_gatekeeper",
+            true,
+            Some(cache_path.clone()),
+            UpdateType::Evaluate,
+            Some(3600),
+        )?;
+
+        // Update the same entry
+        cache_result_with_ttl(
+            "test_gatekeeper",
+            false,
+            Some(cache_path.clone()),
+            UpdateType::Sync,
+            Some(7200), // Different TTL
+        )?;
+
+        // Verify the entry was updated
+        let cache_content = fs::read_to_string(&cache_path)?;
+        let cache: Cache = serde_json::from_str(&cache_content)?;
+
+        let entry = &cache.cache["test_gatekeeper"];
+        assert_eq!(entry.value, false);
+        assert!(matches!(entry.update_type, UpdateType::Sync));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_preserves_other_entries() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let cache_path = temp_dir.path().join("cache.json");
+
+        // Create first entry
+        cache_result_with_ttl(
+            "gatekeeper1",
+            true,
+            Some(cache_path.clone()),
+            UpdateType::Evaluate,
+            None,
+        )?;
+
+        // Create second entry
+        cache_result_with_ttl(
+            "gatekeeper2",
+            false,
+            Some(cache_path.clone()),
+            UpdateType::Set,
+            Some(3600),
+        )?;
+
+        // Verify both entries exist
+        let cache_content = fs::read_to_string(&cache_path)?;
+        let cache: Cache = serde_json::from_str(&cache_content)?;
+
+        assert_eq!(cache.cache.len(), 2);
+        assert!(cache.cache.contains_key("gatekeeper1"));
+        assert!(cache.cache.contains_key("gatekeeper2"));
+
+        assert_eq!(cache.cache["gatekeeper1"].value, true);
+        assert_eq!(cache.cache["gatekeeper2"].value, false);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_update_type_serialization() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let cache_path = temp_dir.path().join("cache.json");
+
+        // Test all update types
+        let update_types = vec![UpdateType::Evaluate, UpdateType::Sync, UpdateType::Set];
+
+        for (i, update_type) in update_types.into_iter().enumerate() {
+            cache_result_with_ttl(
+                &format!("test_{}", i),
+                true,
+                Some(cache_path.clone()),
+                update_type.clone(),
+                None,
+            )?;
+        }
+
+        // Verify serialization
+        let cache_content = fs::read_to_string(&cache_path)?;
+        let _cache: Cache = serde_json::from_str(&cache_content)?;
+
+        // Check that the JSON contains the expected lowercase strings
+        assert!(cache_content.contains("\"evaluate\""));
+        assert!(cache_content.contains("\"sync\""));
+        assert!(cache_content.contains("\"set\""));
+
+        Ok(())
+    }
+}
