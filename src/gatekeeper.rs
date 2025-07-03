@@ -10,13 +10,14 @@ pub fn get_config_dir() -> Result<std::path::PathBuf> {
     if let Ok(env_path) = std::env::var("DOTGK_CONFIG_DIR") {
         Ok(std::path::PathBuf::from(env_path))
     } else {
-        dirs::config_dir().context("Failed to get config directory")
+        let home_dir = dirs::home_dir().context("Failed to get home directory")?;
+        Ok(home_dir.join(".config").join("dotgk"))
     }
 }
 
 #[cfg(test)]
 pub fn get_config_dir() -> Result<std::path::PathBuf> {
-    Ok(std::path::PathBuf::from("examples"))
+    Ok(std::path::PathBuf::from("examples/dotgk"))
 }
 
 #[cfg(test)]
@@ -55,7 +56,6 @@ fn default_true() -> bool {
 
 pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
     let mut config_dir = get_config_dir()?;
-    config_dir.push("dotgk");
     config_dir.push(format!("{}.json", name));
     Ok(config_dir)
 }
@@ -99,14 +99,13 @@ impl Gatekeeper {
 
 pub fn find_all_gatekeepers() -> Result<Vec<String>> {
     let config_dir = get_config_dir()?;
-    let dotgk_dir = config_dir.join("dotgk");
 
-    if !dotgk_dir.exists() {
+    if !config_dir.exists() {
         return Ok(Vec::new());
     }
 
     let mut gatekeepers = Vec::new();
-    for entry in std::fs::read_dir(&dotgk_dir)? {
+    for entry in std::fs::read_dir(&config_dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {

@@ -47,7 +47,6 @@ fn get_cache_path(cache_path: Option<PathBuf>) -> Result<PathBuf> {
     }
 
     let mut config_dir = get_config_dir()?;
-    config_dir.push("dotgk");
     config_dir.push("cache.json");
     Ok(config_dir)
 }
