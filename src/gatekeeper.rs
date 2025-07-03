@@ -43,12 +43,6 @@ pub struct Gatekeeper {
 pub struct Group {
     #[serde(flatten)]
     pub evaluator: Evaluator,
-    #[serde(default = "default_true")]
-    pub on_match: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_condition() -> ConditionType {
@@ -73,50 +67,37 @@ impl Gatekeeper {
     }
 
     fn evaluate_any(&self) -> Result<bool> {
-        // If any group matches and on_match is true, return true
-        // If any group matches and on_match is false, return false
+        // If any group matches, return true
         // If no groups match, return false
         for group in self.groups.iter() {
-            let is_match = group.evaluator.evaluate()?;
-            match (is_match, group.on_match) {
-                (true, true) => return Ok(true),
-                (true, false) => return Ok(false),
-                (false, _) => continue,
+            if group.evaluator.evaluate()? {
+                return Ok(true);
             }
         }
         Ok(false)
     }
 
     fn evaluate_all(&self) -> Result<bool> {
-        // All groups must match and have on_match=true to return true
-        // If any group matches and has on_match=false, return false
+        // All groups must match to return true
         // If any group doesn't match, return false
         if self.groups.is_empty() {
             return Ok(true); // Vacuous truth: all of zero groups match
         }
 
         for group in self.groups.iter() {
-            let is_match = group.evaluator.evaluate()?;
-            match (is_match, group.on_match) {
-                (true, true) => continue,          // This group passes, check next
-                (true, false) => return Ok(false), // Explicit false match
-                (false, _) => return Ok(false),    // Group doesn't match
+            if !group.evaluator.evaluate()? {
+                return Ok(false);
             }
         }
-        Ok(true) // All groups matched with on_match=true
+        Ok(true) // All groups matched
     }
 
     fn evaluate_none(&self) -> Result<bool> {
-        // No groups should match with on_match=true to return true
-        // If any group matches and has on_match=true, return false
-        // If any group matches and has on_match=false, return true
-        // If no groups match, return true
+        // No groups should match to return true
+        // If any group matches, return false
         for group in self.groups.iter() {
-            let is_match = group.evaluator.evaluate()?;
-            match (is_match, group.on_match) {
-                (true, true) => return Ok(false), // A group matched, so "none" fails
-                (true, false) => return Ok(true), // Explicit false match means success for "none"
-                (false, _) => continue,
+            if group.evaluator.evaluate()? {
+                return Ok(false); // A group matched, so "none" fails
             }
         }
         Ok(true) // No groups matched, so "none" succeeds
