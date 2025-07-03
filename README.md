@@ -2,6 +2,14 @@
 
 dotgk is a tool for evaluating gatekeepers, which are sets of conditions that determine whether a certain feature or functionality should be enabled. Gatekeepers can be defined using a JSON configuration file and can include conditions such as file existence, hostname matching, and more.
 
+## Installation
+
+Binaries can be found in the Github release page. Alternatively, run this command (at your own risk)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jrodal98/dotgk/refs/heads/master/install.sh | sh
+```
+
 ## Features
 
 - Evaluate gatekeepers based on conditions such as file existence, hostname matching, and more
