@@ -219,146 +219,37 @@ fn write_cache(cache: &Cache, cache_file_path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-struct GatekeeperEvaluationResult {
-    value: bool,
-    cache_updated: bool,
-}
-
-fn evaluate_gatekeeper_with_cache(
-    name: &str,
-    existing_cache: &Option<Cache>,
-    current_timestamp: u64,
-    updated_cache_entries: &mut HashMap<String, CacheEntry>,
-) -> Result<GatekeeperEvaluationResult> {
-    let cached_entry = existing_cache
-        .as_ref()
-        .and_then(|cache| cache.cache.get(name));
-
-    let (value, cache_updated) = if let Some(entry) = cached_entry {
-        if !is_cache_entry_expired(entry, current_timestamp)
-            && !is_gatekeeper_file_modified(name, entry)
-        {
-            // Use cached value
-            debug!("Using cached value for '{}': {}", name, entry.value);
-            (entry.value, false)
-        } else {
-            // Cache expired or file modified, re-evaluate
-            debug!(
-                "Cache expired or file modified for '{}', re-evaluating",
-                name
-            );
-            let gk = Gatekeeper::from_name(name)?;
-            let result = gk.evaluate()?;
-
-            // Update cache entry
-            let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
-            let new_entry = CacheEntry {
-                value: result,
-                ts: current_timestamp,
-                update_type: UpdateType::Evaluate,
-                expires_at,
-            };
-            updated_cache_entries.insert(name.to_string(), new_entry);
-            (result, true)
-        }
-    } else {
-        // No cache entry, evaluate
-        debug!("No cache entry for '{}', evaluating", name);
-        let gk = Gatekeeper::from_name(name)?;
-        let result = gk.evaluate()?;
-
-        // Create cache entry
-        let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
-        let new_entry = CacheEntry {
-            value: result,
-            ts: current_timestamp,
-            update_type: UpdateType::Evaluate,
-            expires_at,
-        };
-        updated_cache_entries.insert(name.to_string(), new_entry);
-        (result, true)
-    };
-
-    Ok(GatekeeperEvaluationResult {
-        value,
-        cache_updated,
-    })
-}
-
 #[instrument]
 fn get_all_gatekeepers(cache_path: Option<PathBuf>) -> Result<()> {
-    info!("Getting all gatekeeper values");
+    info!("Getting all cached gatekeeper values");
 
     let cache_file_path = get_cache_path(cache_path)?;
-    let current_timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("Failed to get current timestamp")?
-        .as_secs();
 
     // Load existing cache
     let existing_cache = load_cache(&cache_file_path);
 
-    // Find all gatekeepers
-    let gatekeepers = find_all_gatekeepers()?;
-
-    if gatekeepers.is_empty() {
-        println!("No gatekeepers found");
-        return Ok(());
-    }
-
-    info!("Found {} gatekeepers", gatekeepers.len());
-
-    let mut results = Vec::new();
-    let mut updated_cache_entries = HashMap::new();
-    let mut any_cache_updated = false;
-
-    // Preserve existing cache entries if we have a cache
-    if let Some(ref cache) = existing_cache {
-        updated_cache_entries = cache.cache.clone();
-    }
-
-    for name in gatekeepers {
-        match evaluate_gatekeeper_with_cache(
-            &name,
-            &existing_cache,
-            current_timestamp,
-            &mut updated_cache_entries,
-        ) {
-            Ok(result) => {
-                results.push((name, result.value));
-                if result.cache_updated {
-                    any_cache_updated = true;
-                }
-            }
-            Err(e) => {
-                error!("Failed to evaluate gatekeeper '{}': {}", name, e);
-                continue;
-            }
+    if let Some(cache) = existing_cache {
+        if cache.cache.is_empty() {
+            println!("No cached gatekeepers found");
+            return Ok(());
         }
-    }
 
-    // Update cache if needed
-    if any_cache_updated {
-        let cache = Cache {
-            cache: updated_cache_entries,
-            ts: current_timestamp,
-        };
+        info!("Found {} cached gatekeepers", cache.cache.len());
 
-        if let Err(e) = write_cache(&cache, &cache_file_path) {
-            tracing::warn!("Failed to update cache: {}", e);
-        }
-    }
+        // Collect and sort results by name for consistent output
+        let mut results: Vec<(String, bool)> = cache
+            .cache
+            .iter()
+            .map(|(name, entry)| (name.clone(), entry.value))
+            .collect();
 
-    // Display results
-    if results.is_empty() {
-        println!("No gatekeepers could be evaluated");
-    } else {
-        // Sort results by name for consistent output
         results.sort_by(|a, b| a.0.cmp(&b.0));
 
         for (name, value) in results {
             println!("{}: {}", name, value);
         }
+    } else {
+        println!("No cache file found");
     }
 
     Ok(())
@@ -374,78 +265,24 @@ pub fn get_command(name: Option<String>, cache_path: Option<PathBuf>) -> Result<
 
 #[instrument]
 fn get_single_gatekeeper(name: String, cache_path: Option<PathBuf>) -> Result<()> {
-    info!("Getting gatekeeper value: {}", name);
+    info!("Getting cached gatekeeper value: {}", name);
 
     let cache_file_path = get_cache_path(cache_path)?;
-    let current_timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("Failed to get current timestamp")?
-        .as_secs();
 
     // Load existing cache
     let existing_cache = load_cache(&cache_file_path);
 
-    // First, check if we have a valid cached entry (especially for manually set values)
-    if let Some(ref cache) = existing_cache {
+    if let Some(cache) = existing_cache {
         if let Some(entry) = cache.cache.get(&name) {
-            if !is_cache_entry_expired(entry, current_timestamp) {
-                // For manually set entries (UpdateType::Set), don't check file modification
-                // For other entries, check if the file was modified
-                let should_use_cache = match entry.update_type {
-                    UpdateType::Set => true, // Always use cached value for manually set entries
-                    UpdateType::Evaluate | UpdateType::Sync => {
-                        !is_gatekeeper_file_modified(&name, entry)
-                    }
-                };
-
-                if should_use_cache {
-                    info!("Found valid cache entry for '{}': {}", name, entry.value);
-                    println!("{}", entry.value);
-                    return Ok(());
-                }
-            }
+            info!("Found cache entry for '{}': {}", name, entry.value);
+            println!("{}", entry.value);
+            return Ok(());
         }
     }
 
-    // If no valid cache entry, try to evaluate from file
-    let mut updated_cache_entries = HashMap::new();
-
-    // Preserve existing cache entries if we have a cache
-    if let Some(ref cache) = existing_cache {
-        updated_cache_entries = cache.cache.clone();
-    }
-
-    // Evaluate the gatekeeper using the common helper function
-    match evaluate_gatekeeper_with_cache(
-        &name,
-        &existing_cache,
-        current_timestamp,
-        &mut updated_cache_entries,
-    ) {
-        Ok(result) => {
-            info!("Found/evaluated gatekeeper '{}': {}", name, result.value);
-            println!("{}", result.value);
-
-            // Update cache if needed
-            if result.cache_updated {
-                let cache = Cache {
-                    cache: updated_cache_entries,
-                    ts: current_timestamp,
-                };
-
-                if let Err(e) = write_cache(&cache, &cache_file_path) {
-                    // Don't fail the command if caching fails, just log the error
-                    tracing::warn!("Failed to cache evaluation result: {}", e);
-                }
-            }
-
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to get gatekeeper '{}': {}", name, e);
-            Err(e)
-        }
-    }
+    // No cache entry found
+    error!("No cached value found for gatekeeper '{}'", name);
+    anyhow::bail!("No cached value found for gatekeeper '{}'", name);
 }
 
 #[instrument]
