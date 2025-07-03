@@ -193,26 +193,110 @@ pub fn set_command(
     Ok(())
 }
 
+fn load_cache(cache_file_path: &PathBuf) -> Option<Cache> {
+    if cache_file_path.exists() {
+        let cache_content = fs::read_to_string(cache_file_path)
+            .context("Failed to read cache file")
+            .ok()?;
+        serde_json::from_str::<Cache>(&cache_content)
+            .context("Failed to parse cache file")
+            .ok()
+    } else {
+        None
+    }
+}
+
+fn write_cache(cache: &Cache, cache_file_path: &PathBuf) -> Result<()> {
+    if let Some(parent) = cache_file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let cache_json = serde_json::to_string_pretty(cache).context("Failed to serialize cache")?;
+    fs::write(cache_file_path, cache_json)
+        .with_context(|| format!("Failed to write cache to {:?}", cache_file_path))?;
+
+    debug!("Updated cache at {:?}", cache_file_path);
+    Ok(())
+}
+
+struct GatekeeperEvaluationResult {
+    value: bool,
+    cache_updated: bool,
+}
+
+fn evaluate_gatekeeper_with_cache(
+    name: &str,
+    existing_cache: &Option<Cache>,
+    current_timestamp: u64,
+    updated_cache_entries: &mut HashMap<String, CacheEntry>,
+) -> Result<GatekeeperEvaluationResult> {
+    let cached_entry = existing_cache
+        .as_ref()
+        .and_then(|cache| cache.cache.get(name));
+
+    let (value, cache_updated) = if let Some(entry) = cached_entry {
+        if !is_cache_entry_expired(entry, current_timestamp)
+            && !is_gatekeeper_file_modified(name, entry)
+        {
+            // Use cached value
+            debug!("Using cached value for '{}': {}", name, entry.value);
+            (entry.value, false)
+        } else {
+            // Cache expired or file modified, re-evaluate
+            debug!(
+                "Cache expired or file modified for '{}', re-evaluating",
+                name
+            );
+            let gk = Gatekeeper::from_name(name)?;
+            let result = gk.evaluate()?;
+
+            // Update cache entry
+            let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
+            let new_entry = CacheEntry {
+                value: result,
+                ts: current_timestamp,
+                update_type: UpdateType::Evaluate,
+                expires_at,
+            };
+            updated_cache_entries.insert(name.to_string(), new_entry);
+            (result, true)
+        }
+    } else {
+        // No cache entry, evaluate
+        debug!("No cache entry for '{}', evaluating", name);
+        let gk = Gatekeeper::from_name(name)?;
+        let result = gk.evaluate()?;
+
+        // Create cache entry
+        let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
+        let new_entry = CacheEntry {
+            value: result,
+            ts: current_timestamp,
+            update_type: UpdateType::Evaluate,
+            expires_at,
+        };
+        updated_cache_entries.insert(name.to_string(), new_entry);
+        (result, true)
+    };
+
+    Ok(GatekeeperEvaluationResult {
+        value,
+        cache_updated,
+    })
+}
+
 #[instrument]
 fn get_all_gatekeepers(cache_path: Option<PathBuf>) -> Result<()> {
     info!("Getting all gatekeeper values");
 
-    let cache_file_path = get_cache_path(cache_path.clone())?;
+    let cache_file_path = get_cache_path(cache_path)?;
     let current_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("Failed to get current timestamp")?
         .as_secs();
 
     // Load existing cache
-    let existing_cache = if cache_file_path.exists() {
-        let cache_content =
-            fs::read_to_string(&cache_file_path).context("Failed to read cache file")?;
-        serde_json::from_str::<Cache>(&cache_content)
-            .context("Failed to parse cache file")
-            .ok()
-    } else {
-        None
-    };
+    let existing_cache = load_cache(&cache_file_path);
 
     // Find all gatekeepers
     let gatekeepers = find_all_gatekeepers()?;
@@ -226,7 +310,7 @@ fn get_all_gatekeepers(cache_path: Option<PathBuf>) -> Result<()> {
 
     let mut results = Vec::new();
     let mut updated_cache_entries = HashMap::new();
-    let mut cache_updated = false;
+    let mut any_cache_updated = false;
 
     // Preserve existing cache entries if we have a cache
     if let Some(ref cache) = existing_cache {
@@ -234,99 +318,34 @@ fn get_all_gatekeepers(cache_path: Option<PathBuf>) -> Result<()> {
     }
 
     for name in gatekeepers {
-        let cached_entry = existing_cache
-            .as_ref()
-            .and_then(|cache| cache.cache.get(&name));
-
-        let value = if let Some(entry) = cached_entry {
-            if !is_cache_entry_expired(entry, current_timestamp)
-                && !is_gatekeeper_file_modified(&name, entry)
-            {
-                // Use cached value
-                debug!("Using cached value for '{}': {}", name, entry.value);
-                entry.value
-            } else {
-                // Cache expired or file modified, re-evaluate
-                debug!(
-                    "Cache expired or file modified for '{}', re-evaluating",
-                    name
-                );
-                match Gatekeeper::from_name(&name) {
-                    Ok(gk) => match gk.evaluate() {
-                        Ok(result) => {
-                            // Update cache entry
-                            let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
-                            let new_entry = CacheEntry {
-                                value: result,
-                                ts: current_timestamp,
-                                update_type: UpdateType::Evaluate,
-                                expires_at,
-                            };
-                            updated_cache_entries.insert(name.clone(), new_entry);
-                            cache_updated = true;
-                            result
-                        }
-                        Err(e) => {
-                            error!("Failed to evaluate gatekeeper '{}': {}", name, e);
-                            continue;
-                        }
-                    },
-                    Err(e) => {
-                        error!("Failed to load gatekeeper '{}': {}", name, e);
-                        continue;
-                    }
+        match evaluate_gatekeeper_with_cache(
+            &name,
+            &existing_cache,
+            current_timestamp,
+            &mut updated_cache_entries,
+        ) {
+            Ok(result) => {
+                results.push((name, result.value));
+                if result.cache_updated {
+                    any_cache_updated = true;
                 }
             }
-        } else {
-            // No cache entry, evaluate
-            debug!("No cache entry for '{}', evaluating", name);
-            match Gatekeeper::from_name(&name) {
-                Ok(gk) => match gk.evaluate() {
-                    Ok(result) => {
-                        // Create cache entry
-                        let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
-                        let new_entry = CacheEntry {
-                            value: result,
-                            ts: current_timestamp,
-                            update_type: UpdateType::Evaluate,
-                            expires_at,
-                        };
-                        updated_cache_entries.insert(name.clone(), new_entry);
-                        cache_updated = true;
-                        result
-                    }
-                    Err(e) => {
-                        error!("Failed to evaluate gatekeeper '{}': {}", name, e);
-                        continue;
-                    }
-                },
-                Err(e) => {
-                    error!("Failed to load gatekeeper '{}': {}", name, e);
-                    continue;
-                }
+            Err(e) => {
+                error!("Failed to evaluate gatekeeper '{}': {}", name, e);
+                continue;
             }
-        };
-
-        results.push((name, value));
+        }
     }
 
     // Update cache if needed
-    if cache_updated {
+    if any_cache_updated {
         let cache = Cache {
             cache: updated_cache_entries,
             ts: current_timestamp,
         };
 
-        if let Some(parent) = cache_file_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let cache_json =
-            serde_json::to_string_pretty(&cache).context("Failed to serialize cache")?;
-        if let Err(e) = fs::write(&cache_file_path, cache_json) {
+        if let Err(e) = write_cache(&cache, &cache_file_path) {
             tracing::warn!("Failed to update cache: {}", e);
-        } else {
-            debug!("Updated cache at {:?}", cache_file_path);
         }
     }
 
@@ -357,55 +376,52 @@ pub fn get_command(name: Option<String>, cache_path: Option<PathBuf>) -> Result<
 fn get_single_gatekeeper(name: String, cache_path: Option<PathBuf>) -> Result<()> {
     info!("Getting gatekeeper value: {}", name);
 
-    let cache_file_path = get_cache_path(cache_path.clone())?;
+    let cache_file_path = get_cache_path(cache_path)?;
     let current_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("Failed to get current timestamp")?
         .as_secs();
 
-    // Try to load from cache first
-    if cache_file_path.exists() {
-        let cache_content =
-            fs::read_to_string(&cache_file_path).context("Failed to read cache file")?;
+    // Load existing cache
+    let existing_cache = load_cache(&cache_file_path);
+    let mut updated_cache_entries = HashMap::new();
 
-        if let Ok(cache) = serde_json::from_str::<Cache>(&cache_content) {
-            if let Some(entry) = cache.cache.get(&name) {
-                if !is_cache_entry_expired(entry, current_timestamp)
-                    && !is_gatekeeper_file_modified(&name, entry)
-                {
-                    info!("Found valid cache entry for '{}': {}", name, entry.value);
-                    println!("{}", entry.value);
-                    return Ok(());
-                } else {
-                    if is_cache_entry_expired(entry, current_timestamp) {
-                        info!("Cache entry for '{}' has expired, re-evaluating", name);
-                    } else {
-                        info!(
-                            "Gatekeeper file for '{}' has been modified, re-evaluating",
-                            name
-                        );
-                    }
+    // Preserve existing cache entries if we have a cache
+    if let Some(ref cache) = existing_cache {
+        updated_cache_entries = cache.cache.clone();
+    }
+
+    // Evaluate the gatekeeper using the common helper function
+    match evaluate_gatekeeper_with_cache(
+        &name,
+        &existing_cache,
+        current_timestamp,
+        &mut updated_cache_entries,
+    ) {
+        Ok(result) => {
+            info!("Found/evaluated gatekeeper '{}': {}", name, result.value);
+            println!("{}", result.value);
+
+            // Update cache if needed
+            if result.cache_updated {
+                let cache = Cache {
+                    cache: updated_cache_entries,
+                    ts: current_timestamp,
+                };
+
+                if let Err(e) = write_cache(&cache, &cache_file_path) {
+                    // Don't fail the command if caching fails, just log the error
+                    tracing::warn!("Failed to cache evaluation result: {}", e);
                 }
-            } else {
-                info!("No cache entry found for '{}', evaluating", name);
             }
+
+            Ok(())
         }
-    } else {
-        info!("No cache file found, evaluating '{}'", name);
+        Err(e) => {
+            error!("Failed to get gatekeeper '{}': {}", name, e);
+            Err(e)
+        }
     }
-
-    // Cache miss or expired - evaluate and cache
-    let gk = Gatekeeper::from_name(&name)?;
-    let result = gk.evaluate().context("Failed to evaluate gatekeeper")?;
-    info!("Evaluation result: {}", result);
-    println!("{}", result);
-
-    if let Err(e) = cache_result_with_ttl(&name, result, cache_path, UpdateType::Evaluate, gk.ttl) {
-        // Don't fail the command if caching fails, just log the error
-        tracing::warn!("Failed to cache evaluation result: {}", e);
-    }
-
-    Ok(())
 }
 
 #[instrument]
