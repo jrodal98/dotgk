@@ -1,3 +1,4 @@
+mod bool_evaluator;
 mod evaluator_type;
 mod file_evaluator;
 mod gatekeeper_evaluator;
