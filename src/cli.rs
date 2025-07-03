@@ -21,7 +21,8 @@ pub enum Command {
     },
     /// Get a gatekeeper value from cache, evaluating if expired or missing
     Get {
-        name: String,
+        /// Gatekeeper name (if not provided, shows all gatekeepers)
+        name: Option<String>,
         /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
         #[clap(long)]
         cache_path: Option<std::path::PathBuf>,

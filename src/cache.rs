@@ -194,7 +194,167 @@ pub fn set_command(
 }
 
 #[instrument]
-pub fn get_command(name: String, cache_path: Option<PathBuf>) -> Result<()> {
+fn get_all_gatekeepers(cache_path: Option<PathBuf>) -> Result<()> {
+    info!("Getting all gatekeeper values");
+
+    let cache_file_path = get_cache_path(cache_path.clone())?;
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("Failed to get current timestamp")?
+        .as_secs();
+
+    // Load existing cache
+    let existing_cache = if cache_file_path.exists() {
+        let cache_content =
+            fs::read_to_string(&cache_file_path).context("Failed to read cache file")?;
+        serde_json::from_str::<Cache>(&cache_content)
+            .context("Failed to parse cache file")
+            .ok()
+    } else {
+        None
+    };
+
+    // Find all gatekeepers
+    let gatekeepers = find_all_gatekeepers()?;
+
+    if gatekeepers.is_empty() {
+        println!("No gatekeepers found");
+        return Ok(());
+    }
+
+    info!("Found {} gatekeepers", gatekeepers.len());
+
+    let mut results = Vec::new();
+    let mut updated_cache_entries = HashMap::new();
+    let mut cache_updated = false;
+
+    // Preserve existing cache entries if we have a cache
+    if let Some(ref cache) = existing_cache {
+        updated_cache_entries = cache.cache.clone();
+    }
+
+    for name in gatekeepers {
+        let cached_entry = existing_cache
+            .as_ref()
+            .and_then(|cache| cache.cache.get(&name));
+
+        let value = if let Some(entry) = cached_entry {
+            if !is_cache_entry_expired(entry, current_timestamp)
+                && !is_gatekeeper_file_modified(&name, entry)
+            {
+                // Use cached value
+                debug!("Using cached value for '{}': {}", name, entry.value);
+                entry.value
+            } else {
+                // Cache expired or file modified, re-evaluate
+                debug!(
+                    "Cache expired or file modified for '{}', re-evaluating",
+                    name
+                );
+                match Gatekeeper::from_name(&name) {
+                    Ok(gk) => match gk.evaluate() {
+                        Ok(result) => {
+                            // Update cache entry
+                            let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
+                            let new_entry = CacheEntry {
+                                value: result,
+                                ts: current_timestamp,
+                                update_type: UpdateType::Evaluate,
+                                expires_at,
+                            };
+                            updated_cache_entries.insert(name.clone(), new_entry);
+                            cache_updated = true;
+                            result
+                        }
+                        Err(e) => {
+                            error!("Failed to evaluate gatekeeper '{}': {}", name, e);
+                            continue;
+                        }
+                    },
+                    Err(e) => {
+                        error!("Failed to load gatekeeper '{}': {}", name, e);
+                        continue;
+                    }
+                }
+            }
+        } else {
+            // No cache entry, evaluate
+            debug!("No cache entry for '{}', evaluating", name);
+            match Gatekeeper::from_name(&name) {
+                Ok(gk) => match gk.evaluate() {
+                    Ok(result) => {
+                        // Create cache entry
+                        let expires_at = gk.ttl.map(|ttl| current_timestamp + ttl);
+                        let new_entry = CacheEntry {
+                            value: result,
+                            ts: current_timestamp,
+                            update_type: UpdateType::Evaluate,
+                            expires_at,
+                        };
+                        updated_cache_entries.insert(name.clone(), new_entry);
+                        cache_updated = true;
+                        result
+                    }
+                    Err(e) => {
+                        error!("Failed to evaluate gatekeeper '{}': {}", name, e);
+                        continue;
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to load gatekeeper '{}': {}", name, e);
+                    continue;
+                }
+            }
+        };
+
+        results.push((name, value));
+    }
+
+    // Update cache if needed
+    if cache_updated {
+        let cache = Cache {
+            cache: updated_cache_entries,
+            ts: current_timestamp,
+        };
+
+        if let Some(parent) = cache_file_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let cache_json =
+            serde_json::to_string_pretty(&cache).context("Failed to serialize cache")?;
+        if let Err(e) = fs::write(&cache_file_path, cache_json) {
+            tracing::warn!("Failed to update cache: {}", e);
+        } else {
+            debug!("Updated cache at {:?}", cache_file_path);
+        }
+    }
+
+    // Display results
+    if results.is_empty() {
+        println!("No gatekeepers could be evaluated");
+    } else {
+        // Sort results by name for consistent output
+        results.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (name, value) in results {
+            println!("{}: {}", name, value);
+        }
+    }
+
+    Ok(())
+}
+
+#[instrument]
+pub fn get_command(name: Option<String>, cache_path: Option<PathBuf>) -> Result<()> {
+    match name {
+        Some(name) => get_single_gatekeeper(name, cache_path),
+        None => get_all_gatekeepers(cache_path),
+    }
+}
+
+#[instrument]
+fn get_single_gatekeeper(name: String, cache_path: Option<PathBuf>) -> Result<()> {
     info!("Getting gatekeeper value: {}", name);
 
     let cache_file_path = get_cache_path(cache_path.clone())?;
