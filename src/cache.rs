@@ -384,6 +384,30 @@ fn get_single_gatekeeper(name: String, cache_path: Option<PathBuf>) -> Result<()
 
     // Load existing cache
     let existing_cache = load_cache(&cache_file_path);
+
+    // First, check if we have a valid cached entry (especially for manually set values)
+    if let Some(ref cache) = existing_cache {
+        if let Some(entry) = cache.cache.get(&name) {
+            if !is_cache_entry_expired(entry, current_timestamp) {
+                // For manually set entries (UpdateType::Set), don't check file modification
+                // For other entries, check if the file was modified
+                let should_use_cache = match entry.update_type {
+                    UpdateType::Set => true, // Always use cached value for manually set entries
+                    UpdateType::Evaluate | UpdateType::Sync => {
+                        !is_gatekeeper_file_modified(&name, entry)
+                    }
+                };
+
+                if should_use_cache {
+                    info!("Found valid cache entry for '{}': {}", name, entry.value);
+                    println!("{}", entry.value);
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    // If no valid cache entry, try to evaluate from file
     let mut updated_cache_entries = HashMap::new();
 
     // Preserve existing cache entries if we have a cache
@@ -462,12 +486,39 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
     let mut preserved_count = 0;
     let mut skipped_count = 0;
 
+    let mut removed_count = 0;
+
     // First, preserve non-expired entries that aren't gatekeepers
+    // Also remove old gatekeeper entries that no longer have files (unless they were set manually)
     for (name, entry) in existing_cache.cache.iter() {
-        if !gatekeepers.contains(name) && !is_cache_entry_expired(entry, current_timestamp) {
-            cache_entries.insert(name.clone(), entry.clone());
-            preserved_count += 1;
-            debug!("Preserved non-expired entry for '{}'", name);
+        if !gatekeepers.contains(name) {
+            if !is_cache_entry_expired(entry, current_timestamp) {
+                // Check if this is a gatekeeper entry without a corresponding file
+                let should_remove = match entry.update_type {
+                    UpdateType::Set => false, // Never remove manually set entries
+                    UpdateType::Evaluate | UpdateType::Sync => {
+                        // Remove if no corresponding gatekeeper file exists
+                        match get_gatekeeper_path(name) {
+                            Ok(gatekeeper_path) => !gatekeeper_path.exists(),
+                            Err(_) => true, // Remove if we can't determine the path
+                        }
+                    }
+                };
+
+                if should_remove {
+                    info!(
+                        "Removing orphaned gatekeeper entry '{}' (no corresponding file)",
+                        name
+                    );
+                    removed_count += 1;
+                } else {
+                    cache_entries.insert(name.clone(), entry.clone());
+                    preserved_count += 1;
+                    debug!("Preserved non-expired entry for '{}'", name);
+                }
+            } else {
+                debug!("Skipping expired entry for '{}'", name);
+            }
         }
     }
 
@@ -524,16 +575,127 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
 
     info!("Cache written to {:?}", cache_file_path);
     if force {
-        println!(
-            "Force synced {} gatekeepers, preserved {} non-gatekeeper entries",
-            updated_count, preserved_count
-        );
+        if removed_count > 0 {
+            println!(
+                "Force synced {} gatekeepers, preserved {} non-gatekeeper entries, removed {} orphaned entries",
+                updated_count, preserved_count, removed_count
+            );
+        } else {
+            println!(
+                "Force synced {} gatekeepers, preserved {} non-gatekeeper entries",
+                updated_count, preserved_count
+            );
+        }
     } else {
-        println!(
-            "Synced {} gatekeepers, skipped {} non-expired, preserved {} non-gatekeeper entries",
-            updated_count, skipped_count, preserved_count
-        );
+        if removed_count > 0 {
+            println!(
+                "Synced {} gatekeepers, skipped {} non-expired, preserved {} non-gatekeeper entries, removed {} orphaned entries",
+                updated_count, skipped_count, preserved_count, removed_count
+            );
+        } else {
+            println!(
+                "Synced {} gatekeepers, skipped {} non-expired, preserved {} non-gatekeeper entries",
+                updated_count, skipped_count, preserved_count
+            );
+        }
     }
+    Ok(())
+}
+
+#[instrument]
+pub fn rm_command(name: String, cache_path: Option<PathBuf>, remove_file: bool) -> Result<()> {
+    info!(
+        "Removing gatekeeper '{}' (remove_file: {})",
+        name, remove_file
+    );
+
+    let cache_file_path = get_cache_path(cache_path)?;
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("Failed to get current timestamp")?
+        .as_secs();
+
+    // Load existing cache
+    let mut cache_updated = false;
+    let mut cache = if cache_file_path.exists() {
+        let cache_content =
+            fs::read_to_string(&cache_file_path).context("Failed to read existing cache file")?;
+        serde_json::from_str::<Cache>(&cache_content)
+            .context("Failed to parse existing cache file")?
+    } else {
+        Cache {
+            cache: HashMap::new(),
+            ts: current_timestamp,
+        }
+    };
+
+    // Check if cache entry exists
+    let cache_entry_existed = cache.cache.contains_key(&name);
+
+    // Remove from cache if it exists
+    if cache_entry_existed {
+        cache.cache.remove(&name);
+        cache.ts = current_timestamp;
+        cache_updated = true;
+        info!("Removed cache entry for '{}'", name);
+    } else {
+        info!("No cache entry found for '{}'", name);
+    }
+
+    // Handle file removal if requested
+    let mut file_removed = false;
+    if remove_file {
+        match get_gatekeeper_path(&name) {
+            Ok(gatekeeper_path) => {
+                if gatekeeper_path.exists() {
+                    match fs::remove_file(&gatekeeper_path) {
+                        Ok(()) => {
+                            info!("Removed gatekeeper file: {:?}", gatekeeper_path);
+                            file_removed = true;
+                        }
+                        Err(e) => {
+                            error!(
+                                "Failed to remove gatekeeper file {:?}: {}",
+                                gatekeeper_path, e
+                            );
+                            return Err(e.into());
+                        }
+                    }
+                } else {
+                    info!("Gatekeeper file {:?} does not exist", gatekeeper_path);
+                }
+            }
+            Err(e) => {
+                error!("Failed to get gatekeeper path for '{}': {}", name, e);
+                return Err(e);
+            }
+        }
+    }
+
+    // Write updated cache if it was modified
+    if cache_updated {
+        if let Err(e) = write_cache(&cache, &cache_file_path) {
+            error!("Failed to update cache: {}", e);
+            return Err(e);
+        }
+    }
+
+    // Provide user feedback
+    match (cache_entry_existed, file_removed, remove_file) {
+        (true, true, true) => println!("Removed gatekeeper '{}' from cache and deleted file", name),
+        (true, false, true) => println!(
+            "Removed gatekeeper '{}' from cache (file did not exist)",
+            name
+        ),
+        (true, _, false) => println!("Removed gatekeeper '{}' from cache", name),
+        (false, true, true) => println!(
+            "Deleted gatekeeper file for '{}' (no cache entry existed)",
+            name
+        ),
+        (false, false, true) => println!("Gatekeeper '{}' not found in cache or filesystem", name),
+        (false, _, false) => println!("Gatekeeper '{}' not found in cache", name),
+    }
+
     Ok(())
 }
 

@@ -30,7 +30,8 @@ pub enum Command {
     /// Set a value in the cache
     Set {
         name: String,
-        value: bool,
+        /// Value to set (true or false)
+        value: String,
         /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
         #[clap(long)]
         cache_path: Option<std::path::PathBuf>,
@@ -46,5 +47,15 @@ pub enum Command {
         /// Force re-evaluation of all gatekeepers, ignoring TTL
         #[clap(long)]
         force: bool,
+    },
+    /// Remove a gatekeeper entry and optionally its file
+    Rm {
+        name: String,
+        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
+        #[clap(long)]
+        cache_path: Option<std::path::PathBuf>,
+        /// Also remove the gatekeeper JSON file if it exists
+        #[clap(long)]
+        file: bool,
     },
 }

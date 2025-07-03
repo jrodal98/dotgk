@@ -3,7 +3,6 @@ mod cli;
 mod evaluators;
 mod gatekeeper;
 
-use crate::gatekeeper::Gatekeeper;
 use anyhow::Result;
 use clap::Parser;
 use cli::Args;
@@ -11,6 +10,8 @@ use cli::Command;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
+
+use crate::gatekeeper::Gatekeeper;
 
 #[instrument]
 fn evaluate_command(
@@ -62,7 +63,25 @@ fn main() -> Result<()> {
             value,
             cache_path,
             ttl,
-        } => cache::set_command(name, value, cache_path, ttl),
+        } => {
+            let parsed_value = match value.to_lowercase().as_str() {
+                "true" | "1" | "yes" | "on" => true,
+                "false" | "0" | "no" | "off" => false,
+                _ => {
+                    eprintln!(
+                        "Invalid boolean value '{}'. Use: true, false, 1, 0, yes, no, on, or off",
+                        value
+                    );
+                    std::process::exit(1);
+                }
+            };
+            cache::set_command(name, parsed_value, cache_path, ttl)
+        }
         Command::Sync { cache_path, force } => cache::sync_command(cache_path, force),
+        Command::Rm {
+            name,
+            cache_path,
+            file,
+        } => cache::rm_command(name, cache_path, file),
     }
 }
