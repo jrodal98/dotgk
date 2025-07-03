@@ -10,6 +10,7 @@ use cli::Command;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
+use tracing_subscriber::EnvFilter;
 
 use crate::gatekeeper::Gatekeeper;
 
@@ -46,7 +47,19 @@ fn evaluate_command(
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    // Set different default log levels for debug vs release builds
+    let default_level = if cfg!(debug_assertions) {
+        "info" // Debug builds default to info level
+    } else {
+        "error" // Release builds default to error level
+    };
+
+    // Initialize tracing with the appropriate default level
+    // RUST_LOG environment variable can still override this default
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
+
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     let args = Args::parse();
     debug!("Parsed args: {:?}", args);
