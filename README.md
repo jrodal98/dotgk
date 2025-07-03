@@ -1,101 +1,62 @@
-# DotGK README
+# dotgk
 
-## Introduction
-
-DotGK is a gatekeeper system that allows you to define and evaluate conditions for various use cases. This README provides an overview of the project, its features, and how to use it.
+dotgk is a tool for evaluating gatekeepers, which are sets of conditions that determine whether a certain feature or functionality should be enabled. Gatekeepers can be defined using a JSON configuration file and can include conditions such as file existence, hostname matching, and more.
 
 ## Features
 
-* **Gatekeeper system**: Define and evaluate conditions using a simple JSON configuration file.
-* **Cache support**: Cache evaluation results to improve performance and reduce the load on the system.
-* **Flexible condition system**: Use various condition types, such as equality, inequality, any, all, and none, to define complex conditions.
-* **Evaluator system**: Use different evaluators, such as hostname, file, gatekeeper, and OS, to evaluate conditions.
-* **Command-line interface**: Use the `dotgk` command to evaluate gatekeepers, get cache values, set cache values, and sync cache.
+- Evaluate gatekeepers based on conditions such as file existence, hostname matching, and more
+- Cache evaluation results to improve performance
+- Support for multiple condition types, including equality, inequality, any, all, and none
+- Support for multiple evaluator types, including file, hostname, OS, and gatekeeper
 
 ## Usage
 
-### Command-line interface
+dotgk can be used from the command line to evaluate gatekeepers and cache results. The following commands are available:
 
-The `dotgk` command provides the following subcommands:
+- `dotgk evaluate <name>`: Evaluate a gatekeeper and print the result
+- `dotgk get <name>`: Get the cached result for a gatekeeper, evaluating if the cache is expired or missing
+- `dotgk set <name> <value>`: Set a value in the cache for a gatekeeper
+- `dotgk sync`: Sync all gatekeepers and cache results
 
-* `evaluate`: Evaluate a gatekeeper and print the result.
-* `get`: Get a cache value for a gatekeeper.
-* `set`: Set a cache value for a gatekeeper.
-* `sync`: Sync the cache with the gatekeeper definitions.
+## Configuration
 
-### Gatekeeper configuration
+Gatekeepers are defined using a JSON configuration file. The file should contain a `groups` array, where each group represents a set of conditions to evaluate. Each group should have an `evaluator` object, which specifies the type of evaluator to use and the arguments to pass to it. The `condition` field specifies the condition to apply to the evaluator result.
 
-Gatekeepers are defined in JSON files located in the `~/.config/dotgk` directory. Each file represents a single gatekeeper and contains the following fields:
-
-* `groups`: A list of condition groups.
-* `on_no_match`: A boolean indicating what to return if no condition matches.
-* `ttl`: An optional TTL (time-to-live) value for cache entries.
-
-### Condition groups
-
-Condition groups are defined in the `groups` field of a gatekeeper configuration file. Each group contains the following fields:
-
-* `evaluator`: An evaluator object that defines the condition to evaluate.
-* `on_match`: A boolean indicating what to return if the condition matches.
-
-### Evaluators
-
-Evaluators are used to evaluate conditions. The following evaluators are supported:
-
-* `HostnameEvaluator`: Evaluates a condition based on the hostname.
-* `FileEvaluator`: Evaluates a condition based on the existence of a file.
-* `GatekeeperEvaluator`: Evaluates a condition based on the result of another gatekeeper.
-* `OSEvaluator`: Evaluates a condition based on the operating system.
-
-## Examples
-
-### Gatekeeper configuration file
+For example:
 
 ```json
 {
-    "groups": [
-        {
-            "evaluator": {
-                "type": "hostname",
-                "args": {
-                    "target": "example.com"
-                }
-            },
-            "on_match": true
+  "groups": [
+    {
+      "evaluator": {
+        "type": "file",
+        "args": {
+          "path": "/home/user/some_file.txt"
         }
-    ],
-    "on_no_match": false
+      },
+      "condition": "eq"
+    }
+  ]
 }
 ```
 
-### Evaluating a gatekeeper
+This configuration defines a gatekeeper with a single group that evaluates the existence of a file at `/home/user/some_file.txt`. If the file exists, the gatekeeper evaluates to `true`.
 
-```bash
-dotgk evaluate example
-```
+## Evaluators
 
-### Getting a cache value
+dotgk supports the following evaluator types:
 
-```bash
-dotgk get example
-```
+- `file`: Evaluates the existence of a file
+- `hostname`: Evaluates the hostname of the system
+- `os`: Evaluates the operating system of the system
+- `gatekeeper`: Evaluates another gatekeeper
 
-### Setting a cache value
+Each evaluator type has its own set of arguments and conditions that can be applied to it.
 
-```bash
-dotgk set example true
-```
+## Caching
 
-### Syncing the cache
+dotgk caches evaluation results to improve performance. The cache is stored in a JSON file in the configuration directory. The cache can be synced manually using the `dotgk sync` command.
 
-```bash
-dotgk sync
-```
+## Examples
 
-## Contributing
-
-Contributions are welcome! Please submit a pull request with your changes and a brief description of what you've added or fixed.
-
-## License
-
-DotGK is licensed under the MIT License. See the LICENSE file for details.
+The `examples` directory contains sample gatekeeper configurations that demonstrate the different features of dotgk.
