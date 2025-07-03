@@ -16,6 +16,7 @@ use tracing::instrument;
 use crate::gatekeeper::Gatekeeper;
 use crate::gatekeeper::find_all_gatekeepers;
 use crate::gatekeeper::get_config_dir;
+use crate::gatekeeper::get_gatekeeper_path;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
@@ -117,6 +118,61 @@ fn is_cache_entry_expired(entry: &CacheEntry, current_timestamp: u64) -> bool {
     }
 }
 
+fn get_file_modification_time(path: &PathBuf) -> Result<u64> {
+    let metadata =
+        fs::metadata(path).with_context(|| format!("Failed to get metadata for {:?}", path))?;
+    let modified = metadata
+        .modified()
+        .with_context(|| format!("Failed to get modification time for {:?}", path))?;
+    let timestamp = modified
+        .duration_since(UNIX_EPOCH)
+        .context("Failed to convert modification time to timestamp")?
+        .as_secs();
+    Ok(timestamp)
+}
+
+fn is_gatekeeper_file_modified(name: &str, cache_entry: &CacheEntry) -> bool {
+    match get_gatekeeper_path(name) {
+        Ok(gatekeeper_path) => {
+            if !gatekeeper_path.exists() {
+                // If the gatekeeper file doesn't exist, consider it modified to force re-evaluation
+                debug!(
+                    "Gatekeeper file {:?} doesn't exist, treating as modified",
+                    gatekeeper_path
+                );
+                return true;
+            }
+
+            match get_file_modification_time(&gatekeeper_path) {
+                Ok(file_timestamp) => {
+                    let is_modified = file_timestamp > cache_entry.ts;
+                    if is_modified {
+                        debug!(
+                            "Gatekeeper file {:?} modified at {} > cache entry at {}",
+                            gatekeeper_path, file_timestamp, cache_entry.ts
+                        );
+                    }
+                    is_modified
+                }
+                Err(e) => {
+                    debug!(
+                        "Failed to get modification time for {:?}: {}, treating as modified",
+                        gatekeeper_path, e
+                    );
+                    true
+                }
+            }
+        }
+        Err(e) => {
+            debug!(
+                "Failed to get gatekeeper path for '{}': {}, treating as modified",
+                name, e
+            );
+            true
+        }
+    }
+}
+
 #[instrument]
 pub fn set_command(
     name: String,
@@ -154,12 +210,21 @@ pub fn get_command(name: String, cache_path: Option<PathBuf>) -> Result<()> {
 
         if let Ok(cache) = serde_json::from_str::<Cache>(&cache_content) {
             if let Some(entry) = cache.cache.get(&name) {
-                if !is_cache_entry_expired(entry, current_timestamp) {
+                if !is_cache_entry_expired(entry, current_timestamp)
+                    && !is_gatekeeper_file_modified(&name, entry)
+                {
                     info!("Found valid cache entry for '{}': {}", name, entry.value);
                     println!("{}", entry.value);
                     return Ok(());
                 } else {
-                    info!("Cache entry for '{}' has expired, re-evaluating", name);
+                    if is_cache_entry_expired(entry, current_timestamp) {
+                        info!("Cache entry for '{}' has expired, re-evaluating", name);
+                    } else {
+                        info!(
+                            "Gatekeeper file for '{}' has been modified, re-evaluating",
+                            name
+                        );
+                    }
                 }
             } else {
                 info!("No cache entry found for '{}', evaluating", name);
@@ -237,6 +302,7 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
             || existing_entry.is_none()
             || existing_entry.map_or(false, |entry| {
                 is_cache_entry_expired(entry, current_timestamp)
+                    || is_gatekeeper_file_modified(&name, entry)
             });
 
         if should_evaluate {
