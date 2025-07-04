@@ -48,13 +48,13 @@ Run `dotgk --help` or `dotgk <command> --help` for detailed options and usage.
 ### Shell
 
 Run this command (only required once)
-```
+```shell
 dotgk cache enable shell
 ```
 
 Then, use in shell config like so:
 
-```
+```shell
 source ~/.config/dotgk/caches/dotgk.sh
 if dotgk_check "<gatekeeper name>"; then
   <logic here>
@@ -64,13 +64,13 @@ fi
 ### Lua
 
 Run this command (only required once)
-```
+```shell
 dotgk cache enable lua
 ```
 
 Then, use it neovim like this:
 
-```
+```lua
 -- do this part at the top of your init.lua (only required once)
 package.path = package.path .. ";" .. vim.fn.expand "~/.config/dotgk/caches/?.lua"
 
