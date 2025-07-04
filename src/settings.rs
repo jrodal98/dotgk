@@ -24,7 +24,7 @@ impl Default for Settings {
     }
 }
 
-fn get_settings_path() -> Result<PathBuf> {
+pub fn get_settings_path() -> Result<PathBuf> {
     let mut config_dir = get_config_dir()?;
     config_dir.push("settings.json");
     Ok(config_dir)

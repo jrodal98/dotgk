@@ -340,6 +340,48 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
         );
     }
 
+    // Check if settings file has been modified since the last cache update
+    let settings_modified = match settings::get_settings_path() {
+        Ok(settings_path) => {
+            debug!("Checking settings file at: {:?}", settings_path);
+            if settings_path.exists() {
+                match get_file_modification_time(&settings_path) {
+                    Ok(settings_timestamp) => {
+                        let is_modified = settings_timestamp > existing_cache.ts;
+                        debug!(
+                            "Settings file timestamp: {}, cache timestamp: {}, modified: {}",
+                            settings_timestamp, existing_cache.ts, is_modified
+                        );
+                        if is_modified {
+                            info!(
+                                "Settings file modified at {} > cache timestamp {}, forcing regeneration",
+                                settings_timestamp, existing_cache.ts
+                            );
+                        }
+                        is_modified
+                    }
+                    Err(e) => {
+                        debug!(
+                            "Failed to get settings file modification time: {}, treating as not modified",
+                            e
+                        );
+                        false
+                    }
+                }
+            } else {
+                debug!("Settings file does not exist, treating as not modified");
+                false
+            }
+        }
+        Err(e) => {
+            debug!(
+                "Failed to get settings path: {}, treating as not modified",
+                e
+            );
+            false
+        }
+    };
+
     let gatekeepers = find_all_gatekeepers()?;
     info!("Found {} gatekeepers", gatekeepers.len());
 
@@ -389,6 +431,7 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
         let existing_entry = existing_cache.cache.get(&name);
         let should_evaluate = force
             || version_mismatch
+            || settings_modified
             || existing_entry.is_none()
             || existing_entry.map_or(false, |entry| {
                 is_cache_entry_expired(entry, current_timestamp)
@@ -875,6 +918,32 @@ mod tests {
         assert!(cache_content.contains("\"sync\""));
         assert!(cache_content.contains("\"set\""));
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_settings_file_modification_detection() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let settings_path = temp_dir.path().join("settings.json");
+
+        // Create a settings file
+        let mut file = File::create(&settings_path)?;
+        file.write_all(b"{\"enabled_cache_formats\": []}")?;
+        file.sync_all()?;
+        drop(file);
+
+        // Wait a bit to ensure different timestamps
+        thread::sleep(Duration::from_millis(10));
+
+        // Create cache entry with older timestamp
+        let old_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() - 10;
+        let cache_entry = create_test_cache_entry(old_timestamp, None);
+
+        // Check if settings file is considered modified
+        let file_mod_time = get_file_modification_time(&settings_path)?;
+        let is_modified = file_mod_time > cache_entry.ts;
+
+        assert!(is_modified);
         Ok(())
     }
 }

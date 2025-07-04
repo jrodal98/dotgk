@@ -1,0 +1,11 @@
+{
+  "groups": [
+    {
+      "type": "bool",
+      "args": {
+        "pass": false
+      },
+      "condition": "eq"
+    }
+  ]
+}

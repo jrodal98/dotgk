@@ -1,0 +1,16 @@
+{
+  "groups": [
+    {
+      "type": "gatekeeper",
+      "args": [
+        {
+          "name": "meta/devserver"
+        },
+        {
+          "name": "meta/laptop"
+        }
+      ],
+      "condition": "any"
+    }
+  ]
+}
