@@ -2,6 +2,7 @@ mod cache;
 mod cli;
 mod evaluators;
 mod gatekeeper;
+mod settings;
 
 use anyhow::Result;
 use clap::Parser;
