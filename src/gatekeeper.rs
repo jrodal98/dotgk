@@ -52,7 +52,14 @@ fn default_condition() -> ConditionType {
 pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
     let mut config_dir = get_config_dir()?;
     config_dir.push("gatekeeper");
-    config_dir.push(format!("{}.json", name));
+
+    // Check if name contains a subdirectory (e.g., "meta/devserver")
+    if name.contains('/') {
+        config_dir.push(format!("{}.json", name));
+    } else {
+        config_dir.push(format!("{}.json", name));
+    }
+
     Ok(config_dir)
 }
 
@@ -118,8 +125,13 @@ impl Gatekeeper {
             anyhow::bail!("Gatekeeper '{}' not found at {:?}", name, gatekeeper_path);
         }
 
-        let gatekeeper_content = std::fs::read_to_string(&gatekeeper_path)
-            .with_context(|| format!("Failed to read gatekeeper '{}'", name))?;
+        let gatekeeper_content = std::fs::read_to_string(&gatekeeper_path).with_context(|| {
+            format!(
+                "Failed to read gatekeeper '{}' at path '{}'",
+                name,
+                gatekeeper_path.display()
+            )
+        })?;
 
         let gatekeeper = Self::from_json(&gatekeeper_content)
             .with_context(|| format!("Failed to parse gatekeeper '{}'", name))?;
@@ -137,18 +149,44 @@ pub fn find_all_gatekeepers() -> Result<Vec<String>> {
     }
 
     let mut gatekeepers = Vec::new();
-    for entry in std::fs::read_dir(&config_dir)? {
+    find_gatekeepers_recursive(&config_dir, "", &mut gatekeepers)?;
+    Ok(gatekeepers)
+}
+
+fn find_gatekeepers_recursive(
+    dir: &std::path::Path,
+    prefix: &str,
+    gatekeepers: &mut Vec<String>,
+) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
+
         if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
             if let Some(stem) = path.file_stem() {
                 if let Some(name) = stem.to_str() {
-                    gatekeepers.push(name.to_string());
+                    let full_name = if prefix.is_empty() {
+                        name.to_string()
+                    } else {
+                        format!("{}/{}", prefix, name)
+                    };
+                    gatekeepers.push(full_name);
+                }
+            }
+        } else if path.is_dir() {
+            if let Some(dir_name) = path.file_name() {
+                if let Some(dir_str) = dir_name.to_str() {
+                    let new_prefix = if prefix.is_empty() {
+                        dir_str.to_string()
+                    } else {
+                        format!("{}/{}", prefix, dir_str)
+                    };
+                    find_gatekeepers_recursive(&path, &new_prefix, gatekeepers)?;
                 }
             }
         }
     }
-    Ok(gatekeepers)
+    Ok(())
 }
 
 #[cfg(test)]
