@@ -34,7 +34,7 @@ dotgk get my-feature
 # Set a cached value
 dotgk set my-feature true
 
-# Sync all gatekeepers
+# Sync all gatekeepers (i.e. regenerate caches)
 dotgk sync
 
 # Enable cache format generation
@@ -42,6 +42,46 @@ dotgk cache enable shell
 ```
 
 Run `dotgk --help` or `dotgk <command> --help` for detailed options and usage.
+
+## Integrations
+
+### Shell
+
+Run this command (only required once)
+```
+dotgk cache enable shell
+```
+
+Then, use in shell config like so:
+
+```
+source ~/.config/dotgk/caches/dotgk.sh
+if dotgk_check "<gatekeeper name>"; then
+  <logic here>
+fi
+```
+
+### Lua
+
+Run this command (only required once)
+```
+dotgk cache enable lua
+```
+
+Then, use it neovim like this:
+
+```
+-- do this part at the top of your init.lua (only required once)
+package.path = package.path .. ";" .. vim.fn.expand "~/.config/dotgk/caches/?.lua"
+
+local dotgk = require "dotgk"
+if dotgk.check "<gatekeeper name>" then
+   <logic here>
+end
+```
+
+I haven't looked beyond neovim yet, but I'll update this once I play around with my wezterm config.
+
 
 ## Configuration
 
