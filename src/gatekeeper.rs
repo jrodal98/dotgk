@@ -51,7 +51,7 @@ fn default_condition() -> ConditionType {
 
 pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
     let mut config_dir = get_config_dir()?;
-    config_dir.push("gatekeeper");
+    config_dir.push("gatekeepers");
 
     // Check if name contains a subdirectory (e.g., "meta/devserver")
     if name.contains('/') {
@@ -142,7 +142,7 @@ impl Gatekeeper {
 
 pub fn find_all_gatekeepers() -> Result<Vec<String>> {
     let mut config_dir = get_config_dir()?;
-    config_dir.push("gatekeeper");
+    config_dir.push("gatekeepers");
 
     if !config_dir.exists() {
         return Ok(Vec::new());
@@ -285,6 +285,48 @@ mod tests {
         let gatekeeper = Gatekeeper::from_json(json)?;
         let result = gatekeeper.evaluate()?;
         assert_eq!(result, true); // Vacuous truth: all of zero groups match
+        Ok(())
+    }
+
+    // Test subdirectory-based gatekeeper loading
+    #[test]
+    fn test_subdirectory_gatekeeper_meta_devserver() -> Result<()> {
+        test_helper("meta/devserver", true)
+    }
+
+    #[test]
+    fn test_subdirectory_gatekeeper_meta_laptop() -> Result<()> {
+        test_helper("meta/laptop", false)
+    }
+
+    #[test]
+    fn test_subdirectory_gatekeeper_os_linux() -> Result<()> {
+        test_helper("os/linux", true)
+    }
+
+    #[test]
+    fn test_subdirectory_composite_gatekeeper() -> Result<()> {
+        test_helper("meta/composite", true)
+    }
+
+    // Test find_all_gatekeepers includes subdirectory gatekeepers
+    #[test]
+    fn test_find_all_gatekeepers_includes_subdirectories() -> Result<()> {
+        let gatekeepers = find_all_gatekeepers()?;
+
+        // Should include both flat and subdirectory gatekeepers
+        assert!(gatekeepers.contains(&"meta/devserver".to_string()));
+        assert!(gatekeepers.contains(&"meta/laptop".to_string()));
+        assert!(gatekeepers.contains(&"os/linux".to_string()));
+        assert!(gatekeepers.contains(&"meta/composite".to_string()));
+
+        // Verify we have some subdirectory gatekeepers
+        let subdir_gatekeepers: Vec<_> = gatekeepers
+            .iter()
+            .filter(|name| name.contains('/'))
+            .collect();
+        assert!(!subdir_gatekeepers.is_empty());
+
         Ok(())
     }
 }
