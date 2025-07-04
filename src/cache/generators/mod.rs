@@ -34,8 +34,8 @@ pub trait CacheGenerator {
     /// Generates the cache file at the specified path
     fn generate_file(&self, cache: &Cache, cache_path: Option<PathBuf>) -> Result<()> {
         let mut config_dir = get_config_dir()?;
-        config_dir.push("cache");
-        config_dir.push(format!("cache.{}", self.file_extension()));
+        config_dir.push("caches");
+        config_dir.push(format!("dotgk.{}", self.file_extension()));
 
         let file_path = cache_path.unwrap_or(config_dir);
 
