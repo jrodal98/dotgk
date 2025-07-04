@@ -5,8 +5,7 @@
       "args": {
         "name": "another_gatekeeper"
       },
-      "condition": "eq",
-      "on_match": true
+      "condition": "eq"
     },
     {
       "type": "gatekeeper",
@@ -18,8 +17,7 @@
           "name": "feature_flag_2"
         }
       ],
-      "condition": "any",
-      "on_match": true
+      "condition": "any"
     },
     {
       "type": "file",
@@ -28,6 +26,5 @@
       },
       "condition": "eq"
     }
-  ],
-  "on_no_match": false
+  ]
 }

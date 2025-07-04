@@ -10,8 +10,7 @@
           "path": "/home/jrodal/.zshrc"
         }
       ],
-      "condition": "all",
-      "on_match": false
+      "condition": "all"
     },
     {
       "type": "hostname",
@@ -20,6 +19,5 @@
       },
       "condition": "eq"
     }
-  ],
-  "on_no_match": false
+  ]
 }

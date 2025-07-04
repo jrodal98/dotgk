@@ -1,0 +1,19 @@
+{
+  "condition": "any",
+  "groups": [
+    {
+      "type": "bool",
+      "args": {
+        "pass": false
+      },
+      "condition": "eq"
+    },
+    {
+      "type": "bool",
+      "args": {
+        "pass": false
+      },
+      "condition": "eq"
+    }
+  ]
+}

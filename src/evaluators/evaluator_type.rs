@@ -3,6 +3,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 pub use super::OneOrMany;
+pub use super::bool_evaluator::BoolEvaluator;
 pub use super::file_evaluator::FileEvaluator;
 pub use super::gatekeeper_evaluator::GatekeeperEvaluator;
 pub use super::hostname_evaluator::HostnameEvaluator;
@@ -68,6 +69,7 @@ evaluator_enum_and_impl! {
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(rename_all = "lowercase", tag = "type", content = "args")]
     pub enum EvaluatorType {
+        Bool(OneOrMany<BoolEvaluator>),
         Hostname(OneOrMany<HostnameEvaluator>),
         File(OneOrMany<FileEvaluator>),
         Gatekeeper(OneOrMany<GatekeeperEvaluator>),
