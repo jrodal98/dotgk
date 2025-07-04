@@ -10,32 +10,16 @@ use tracing::debug;
 use crate::gatekeeper::get_config_dir;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct CacheFormats {
-    #[serde(default)]
-    pub lua: bool,
-    #[serde(default)]
-    pub shell: bool,
-}
-
-impl Default for CacheFormats {
-    fn default() -> Self {
-        Self {
-            lua: false,
-            shell: false,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
+    /// List of enabled cache formats to generate
     #[serde(default)]
-    pub cache_formats: CacheFormats,
+    pub enabled_cache_formats: Vec<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            cache_formats: CacheFormats::default(),
+            enabled_cache_formats: Vec::new(),
         }
     }
 }
@@ -96,24 +80,29 @@ mod tests {
     #[test]
     fn test_default_settings() {
         let settings = Settings::default();
-        assert!(!settings.cache_formats.lua);
-        assert!(!settings.cache_formats.shell);
+        assert!(settings.enabled_cache_formats.is_empty());
     }
 
     #[test]
     fn test_settings_serialization() -> Result<()> {
         let settings = Settings {
-            cache_formats: CacheFormats {
-                lua: true,
-                shell: false,
-            },
+            enabled_cache_formats: vec!["Lua".to_string(), "shell".to_string()],
         };
 
         let json = serde_json::to_string_pretty(&settings)?;
         let deserialized: Settings = serde_json::from_str(&json)?;
 
-        assert!(deserialized.cache_formats.lua);
-        assert!(!deserialized.cache_formats.shell);
+        assert_eq!(deserialized.enabled_cache_formats.len(), 2);
+        assert!(
+            deserialized
+                .enabled_cache_formats
+                .contains(&"Lua".to_string())
+        );
+        assert!(
+            deserialized
+                .enabled_cache_formats
+                .contains(&"shell".to_string())
+        );
 
         Ok(())
     }
@@ -124,15 +113,19 @@ mod tests {
         let json = r#"{}"#;
         let settings: Settings = serde_json::from_str(json)?;
 
-        assert!(!settings.cache_formats.lua);
-        assert!(!settings.cache_formats.shell);
+        assert!(settings.enabled_cache_formats.is_empty());
 
-        // Test partial cache_formats
-        let json = r#"{"cache_formats": {"lua": true}}"#;
+        // Test with enabled_cache_formats
+        let json = r#"{"enabled_cache_formats": ["Lua", "python"]}"#;
         let settings: Settings = serde_json::from_str(json)?;
 
-        assert!(settings.cache_formats.lua);
-        assert!(!settings.cache_formats.shell);
+        assert_eq!(settings.enabled_cache_formats.len(), 2);
+        assert!(settings.enabled_cache_formats.contains(&"Lua".to_string()));
+        assert!(
+            settings
+                .enabled_cache_formats
+                .contains(&"python".to_string())
+        );
 
         Ok(())
     }
