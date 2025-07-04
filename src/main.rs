@@ -69,6 +69,10 @@ fn cache_command(action: CacheAction) -> Result<()> {
                 "Current enabled formats: {}",
                 settings.enabled_cache_formats.join(", ")
             );
+
+            // Run sync to generate the newly enabled cache format
+            info!("Running sync to generate newly enabled cache format");
+            cache::sync_command(None, false)?;
         }
         CacheAction::Disable { name } => {
             info!("Disabling cache format: {}", name);
