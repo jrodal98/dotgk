@@ -86,6 +86,7 @@ impl CacheGeneratorRegistry {
     }
 
     /// Get all available generator names
+    #[cfg(test)]
     pub fn available_generators(&self) -> Vec<&str> {
         self.generators.keys().map(|s| s.as_str()).collect()
     }
