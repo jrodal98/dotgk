@@ -43,4 +43,23 @@ pub enum Command {
         #[clap(long)]
         file: bool,
     },
+    /// Manage cache format settings
+    Cache {
+        #[clap(subcommand)]
+        action: CacheAction,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum CacheAction {
+    /// Enable a cache format
+    Enable {
+        /// Cache format name (e.g., lua, shell, python)
+        name: String,
+    },
+    /// Disable a cache format
+    Disable {
+        /// Cache format name (e.g., lua, shell, python)
+        name: String,
+    },
 }
