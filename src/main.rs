@@ -2,10 +2,12 @@ mod cache;
 mod cli;
 mod evaluators;
 mod gatekeeper;
+mod settings;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::Args;
+use cli::CacheAction;
 use cli::Command;
 use tracing::debug;
 use tracing::info;
@@ -15,11 +17,7 @@ use tracing_subscriber::EnvFilter;
 use crate::gatekeeper::Gatekeeper;
 
 #[instrument]
-fn evaluate_command(
-    name: String,
-    cache_path: Option<std::path::PathBuf>,
-    no_cache: bool,
-) -> Result<()> {
+fn evaluate_command(name: String, no_cache: bool) -> Result<()> {
     info!("Evaluating gatekeeper: {}", name);
 
     let gatekeeper = Gatekeeper::from_name(&name)?;
@@ -31,15 +29,79 @@ fn evaluate_command(
     if !no_cache {
         let ttl = gatekeeper.ttl;
 
-        if let Err(e) = cache::cache_result_with_ttl(
-            &name,
-            result,
-            cache_path,
-            cache::UpdateType::Evaluate,
-            ttl,
-        ) {
+        if let Err(e) =
+            cache::cache_result_with_ttl(&name, result, None, cache::UpdateType::Evaluate, ttl)
+        {
             // Don't fail the command if caching fails, just log the error
             tracing::warn!("Failed to cache evaluation result: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
+#[instrument]
+fn cache_command(action: CacheAction) -> Result<()> {
+    match action {
+        CacheAction::Enable { name } => {
+            info!("Enabling cache format: {}", name);
+
+            // Load current settings
+            let mut settings = settings::load_settings().unwrap_or_else(|e| {
+                debug!("Failed to load settings, using defaults: {}", e);
+                settings::Settings::default()
+            });
+
+            // Check if format is already enabled
+            if settings.enabled_cache_formats.contains(&name) {
+                println!("Cache format '{}' is already enabled", name);
+                return Ok(());
+            }
+
+            // Add the format to enabled list
+            settings.enabled_cache_formats.push(name.clone());
+
+            // Save updated settings
+            settings::save_settings(&settings)?;
+
+            println!("Enabled cache format '{}'", name);
+            println!(
+                "Current enabled formats: {}",
+                settings.enabled_cache_formats.join(", ")
+            );
+        }
+        CacheAction::Disable { name } => {
+            info!("Disabling cache format: {}", name);
+
+            // Load current settings
+            let mut settings = settings::load_settings().unwrap_or_else(|e| {
+                debug!("Failed to load settings, using defaults: {}", e);
+                settings::Settings::default()
+            });
+
+            // Check if format is currently enabled
+            if !settings.enabled_cache_formats.contains(&name) {
+                println!("Cache format '{}' is not currently enabled", name);
+                return Ok(());
+            }
+
+            // Remove the format from enabled list
+            settings
+                .enabled_cache_formats
+                .retain(|format| format != &name);
+
+            // Save updated settings
+            settings::save_settings(&settings)?;
+
+            println!("Disabled cache format '{}'", name);
+            if settings.enabled_cache_formats.is_empty() {
+                println!("No cache formats are currently enabled");
+            } else {
+                println!(
+                    "Current enabled formats: {}",
+                    settings.enabled_cache_formats.join(", ")
+                );
+            }
         }
     }
 
@@ -65,18 +127,9 @@ fn main() -> Result<()> {
     debug!("Parsed args: {:?}", args);
 
     match args.command {
-        Command::Evaluate {
-            name,
-            cache_path,
-            no_cache,
-        } => evaluate_command(name, cache_path, no_cache),
-        Command::Get { name, cache_path } => cache::get_command(name, cache_path),
-        Command::Set {
-            name,
-            value,
-            cache_path,
-            ttl,
-        } => {
+        Command::Evaluate { name, no_cache } => evaluate_command(name, no_cache),
+        Command::Get { name } => cache::get_command(name, None),
+        Command::Set { name, value, ttl } => {
             let parsed_value = match value.to_lowercase().as_str() {
                 "true" | "1" | "yes" | "on" => true,
                 "false" | "0" | "no" | "off" => false,
@@ -88,13 +141,10 @@ fn main() -> Result<()> {
                     std::process::exit(1);
                 }
             };
-            cache::set_command(name, parsed_value, cache_path, ttl)
+            cache::set_command(name, parsed_value, None, ttl)
         }
-        Command::Sync { cache_path, force } => cache::sync_command(cache_path, force),
-        Command::Rm {
-            name,
-            cache_path,
-            file,
-        } => cache::rm_command(name, cache_path, file),
+        Command::Sync { force } => cache::sync_command(None, force),
+        Command::Rm { name, file } => cache::rm_command(name, None, file),
+        Command::Cache { action } => cache_command(action),
     }
 }

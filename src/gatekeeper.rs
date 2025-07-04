@@ -51,6 +51,7 @@ fn default_condition() -> ConditionType {
 
 pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
     let mut config_dir = get_config_dir()?;
+    config_dir.push("gatekeeper");
     config_dir.push(format!("{}.json", name));
     Ok(config_dir)
 }
@@ -128,7 +129,8 @@ impl Gatekeeper {
 }
 
 pub fn find_all_gatekeepers() -> Result<Vec<String>> {
-    let config_dir = get_config_dir()?;
+    let mut config_dir = get_config_dir()?;
+    config_dir.push("gatekeeper");
 
     if !config_dir.exists() {
         return Ok(Vec::new());
@@ -141,9 +143,7 @@ pub fn find_all_gatekeepers() -> Result<Vec<String>> {
         if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
             if let Some(stem) = path.file_stem() {
                 if let Some(name) = stem.to_str() {
-                    if name != "cache" {
-                        gatekeepers.push(name.to_string());
-                    }
+                    gatekeepers.push(name.to_string());
                 }
             }
         }

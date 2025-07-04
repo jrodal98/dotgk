@@ -12,9 +12,6 @@ pub enum Command {
     /// Evaluate a gatekeeper
     Evaluate {
         name: String,
-        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
-        #[clap(long)]
-        cache_path: Option<std::path::PathBuf>,
         /// Disable caching of the evaluation result
         #[clap(long)]
         no_cache: bool,
@@ -23,27 +20,18 @@ pub enum Command {
     Get {
         /// Gatekeeper name (if not provided, shows all gatekeepers)
         name: Option<String>,
-        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
-        #[clap(long)]
-        cache_path: Option<std::path::PathBuf>,
     },
     /// Set a value in the cache
     Set {
         name: String,
         /// Value to set (true or false)
         value: String,
-        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
-        #[clap(long)]
-        cache_path: Option<std::path::PathBuf>,
         /// Time-to-live in seconds for the cached value
         #[clap(long)]
         ttl: Option<u64>,
     },
     /// Sync all gatekeepers and cache results
     Sync {
-        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
-        #[clap(long)]
-        cache_path: Option<std::path::PathBuf>,
         /// Force re-evaluation of all gatekeepers, ignoring TTL
         #[clap(long)]
         force: bool,
@@ -51,11 +39,27 @@ pub enum Command {
     /// Remove a gatekeeper entry and optionally its file
     Rm {
         name: String,
-        /// Optional path to cache file (defaults to config_dir/dotgk/cache.json)
-        #[clap(long)]
-        cache_path: Option<std::path::PathBuf>,
         /// Also remove the gatekeeper JSON file if it exists
         #[clap(long)]
         file: bool,
+    },
+    /// Manage cache format settings
+    Cache {
+        #[clap(subcommand)]
+        action: CacheAction,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum CacheAction {
+    /// Enable a cache format
+    Enable {
+        /// Cache format name (e.g., lua, shell, python)
+        name: String,
+    },
+    /// Disable a cache format
+    Disable {
+        /// Cache format name (e.g., lua, shell, python)
+        name: String,
     },
 }

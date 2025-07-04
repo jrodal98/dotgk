@@ -13,10 +13,12 @@ use tracing::error;
 use tracing::info;
 use tracing::instrument;
 
+use crate::cache::generators::CacheGeneratorRegistry;
 use crate::gatekeeper::Gatekeeper;
 use crate::gatekeeper::find_all_gatekeepers;
 use crate::gatekeeper::get_config_dir;
 use crate::gatekeeper::get_gatekeeper_path;
+use crate::settings;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
@@ -39,6 +41,16 @@ pub struct CacheEntry {
 pub struct Cache {
     pub cache: HashMap<String, CacheEntry>,
     pub ts: u64,
+    #[serde(default = "default_version")]
+    pub version: String,
+}
+
+fn default_version() -> String {
+    "0.0.0".to_string()
+}
+
+fn get_current_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 fn get_cache_path(cache_path: Option<PathBuf>) -> Result<PathBuf> {
@@ -47,6 +59,7 @@ fn get_cache_path(cache_path: Option<PathBuf>) -> Result<PathBuf> {
     }
 
     let mut config_dir = get_config_dir()?;
+    config_dir.push("cache");
     config_dir.push("cache.json");
     Ok(config_dir)
 }
@@ -80,6 +93,7 @@ pub fn cache_result_with_ttl(
         Cache {
             cache: HashMap::new(),
             ts: current_timestamp,
+            version: get_current_version(),
         }
     };
 
@@ -311,8 +325,20 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
         Cache {
             cache: HashMap::new(),
             ts: current_timestamp,
+            version: get_current_version(),
         }
     };
+
+    // Check if cache version differs from binary version
+    let current_version = get_current_version();
+    let version_mismatch = existing_cache.version != current_version;
+
+    if version_mismatch {
+        info!(
+            "Cache version mismatch: cache={}, binary={}, forcing regeneration",
+            existing_cache.version, current_version
+        );
+    }
 
     let gatekeepers = find_all_gatekeepers()?;
     info!("Found {} gatekeepers", gatekeepers.len());
@@ -362,6 +388,7 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
     for name in gatekeepers {
         let existing_entry = existing_cache.cache.get(&name);
         let should_evaluate = force
+            || version_mismatch
             || existing_entry.is_none()
             || existing_entry.map_or(false, |entry| {
                 is_cache_entry_expired(entry, current_timestamp)
@@ -402,6 +429,7 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
     let cache = Cache {
         cache: cache_entries,
         ts: current_timestamp,
+        version: current_version,
     };
 
     let cache_json = serde_json::to_string_pretty(&cache).context("Failed to serialize cache")?;
@@ -410,6 +438,23 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
         .with_context(|| format!("Failed to write cache to {:?}", cache_file_path))?;
 
     info!("Cache written to {:?}", cache_file_path);
+
+    // Generate additional cache formats only if gatekeepers were actually synced
+    let generated_formats = if updated_count > 0 {
+        // Load settings to check if additional cache formats should be generated
+        let settings = settings::load_settings().unwrap_or_else(|e| {
+            debug!("Failed to load settings, using defaults: {}", e);
+            settings::Settings::default()
+        });
+
+        // Generate additional cache formats if enabled
+        let registry = CacheGeneratorRegistry::new();
+        registry.generate_caches(&cache, &settings.enabled_cache_formats)
+    } else {
+        Vec::new()
+    };
+
+    // Print sync results
     if force {
         if removed_count > 0 {
             println!(
@@ -435,6 +480,15 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
             );
         }
     }
+
+    // Print information about generated cache formats
+    if !generated_formats.is_empty() {
+        println!(
+            "Generated additional cache formats: {}",
+            generated_formats.join(", ")
+        );
+    }
+
     Ok(())
 }
 
@@ -462,6 +516,7 @@ pub fn rm_command(name: String, cache_path: Option<PathBuf>, remove_file: bool) 
         Cache {
             cache: HashMap::new(),
             ts: current_timestamp,
+            version: get_current_version(),
         }
     };
 
