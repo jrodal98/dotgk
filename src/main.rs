@@ -15,11 +15,7 @@ use tracing_subscriber::EnvFilter;
 use crate::gatekeeper::Gatekeeper;
 
 #[instrument]
-fn evaluate_command(
-    name: String,
-    cache_path: Option<std::path::PathBuf>,
-    no_cache: bool,
-) -> Result<()> {
+fn evaluate_command(name: String, no_cache: bool) -> Result<()> {
     info!("Evaluating gatekeeper: {}", name);
 
     let gatekeeper = Gatekeeper::from_name(&name)?;
@@ -31,13 +27,9 @@ fn evaluate_command(
     if !no_cache {
         let ttl = gatekeeper.ttl;
 
-        if let Err(e) = cache::cache_result_with_ttl(
-            &name,
-            result,
-            cache_path,
-            cache::UpdateType::Evaluate,
-            ttl,
-        ) {
+        if let Err(e) =
+            cache::cache_result_with_ttl(&name, result, None, cache::UpdateType::Evaluate, ttl)
+        {
             // Don't fail the command if caching fails, just log the error
             tracing::warn!("Failed to cache evaluation result: {}", e);
         }
@@ -65,18 +57,9 @@ fn main() -> Result<()> {
     debug!("Parsed args: {:?}", args);
 
     match args.command {
-        Command::Evaluate {
-            name,
-            cache_path,
-            no_cache,
-        } => evaluate_command(name, cache_path, no_cache),
-        Command::Get { name, cache_path } => cache::get_command(name, cache_path),
-        Command::Set {
-            name,
-            value,
-            cache_path,
-            ttl,
-        } => {
+        Command::Evaluate { name, no_cache } => evaluate_command(name, no_cache),
+        Command::Get { name } => cache::get_command(name, None),
+        Command::Set { name, value, ttl } => {
             let parsed_value = match value.to_lowercase().as_str() {
                 "true" | "1" | "yes" | "on" => true,
                 "false" | "0" | "no" | "off" => false,
@@ -88,13 +71,9 @@ fn main() -> Result<()> {
                     std::process::exit(1);
                 }
             };
-            cache::set_command(name, parsed_value, cache_path, ttl)
+            cache::set_command(name, parsed_value, None, ttl)
         }
-        Command::Sync { cache_path, force } => cache::sync_command(cache_path, force),
-        Command::Rm {
-            name,
-            cache_path,
-            file,
-        } => cache::rm_command(name, cache_path, file),
+        Command::Sync { force } => cache::sync_command(None, force),
+        Command::Rm { name, file } => cache::rm_command(name, None, file),
     }
 }
