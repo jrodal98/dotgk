@@ -150,14 +150,33 @@ return any({
 
 ### Directory Aggregates with init.lua
 
-Directories can have an `init.lua` file that acts as the default module, following standard Lua convention:
+Directories can have an `init.lua` file that acts as the default module, following standard Lua convention.
+
+**Use `dir()` to automatically aggregate all files in a directory:**
 
 ```lua
--- meta/init.lua
+-- meta/init.lua (automatic aggregation)
+return any(dir())         -- Loads all files in meta/ (excluding init.lua itself)
+```
+
+This is equivalent to manually listing all files:
+```lua
 return any({
   require("meta.devserver"),
   require("meta.laptop"),
   require("meta.linux"),
+  require("meta.mac"),
+  require("meta.windows"),
+  require("meta.wsl"),
+})
+```
+
+**Reference other directories:**
+```lua
+-- Complex aggregation
+return all({
+  any(dir()),             -- At least one meta/* is true
+  any(dir("os")),         -- AND at least one os/* is true
 })
 ```
 
@@ -203,6 +222,7 @@ return file_exists("/tmp/cache")
 - `hostname(target: string) -> bool` - Match against system hostname
 - `os(name: string) -> bool` - Check operating system ("linux", "macos", "windows", "unix")
 - `require(name: string) -> bool` - Load another gatekeeper (standard Lua, use dot notation)
+- `dir(path?: string) -> table<bool>` - Load all gatekeepers in a directory (defaults to current dir in init.lua)
 - `any(checks: table) -> bool` - OR logic (at least one must be true)
 - `all(checks: table) -> bool` - AND logic (all must be true)
 - `none(checks: table) -> bool` - NOR logic (all must be false)

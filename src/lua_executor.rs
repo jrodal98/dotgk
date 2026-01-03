@@ -112,6 +112,66 @@ impl LuaExecutor {
         let bool_check = lua.create_function(|_, value: bool| Ok(value))?;
         globals.set("bool", bool_check)?;
 
+        // dir(path: optional string) -> table of booleans
+        // Scans a directory and loads all gatekeeper files, returning their results
+        let dir_func = lua.create_function(|lua_ctx, path: Option<String>| -> LuaResult<Vec<bool>> {
+            // Determine directory to scan
+            let dir_path_str = path.unwrap_or_else(|| {
+                // Get _DOTGK_CURRENT_DIR global if set (for init.lua context)
+                lua_ctx.globals()
+                    .get::<_, Option<String>>("_DOTGK_CURRENT_DIR")
+                    .unwrap_or(None)
+                    .unwrap_or_else(|| ".".to_string())
+            });
+
+            // Get config directory
+            let config_dir = crate::gatekeeper::get_config_dir()
+                .map_err(|e| LuaError::RuntimeError(format!("Failed to get config dir: {}", e)))?;
+            let scan_path = config_dir.join("gatekeepers").join(&dir_path_str);
+
+            if !scan_path.is_dir() {
+                return Err(LuaError::RuntimeError(format!(
+                    "Directory '{}' not found at {:?}",
+                    dir_path_str, scan_path
+                )));
+            }
+
+            // Scan directory for .lua files (excluding init.lua)
+            let mut results = Vec::new();
+            for entry in std::fs::read_dir(&scan_path)
+                .map_err(|e| LuaError::RuntimeError(format!("Cannot read directory: {}", e)))? {
+                let entry = entry.map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+                let file_path = entry.path();
+
+                if file_path.is_file() && file_path.extension().map_or(false, |ext| ext == "lua") {
+                    if let Some(stem) = file_path.file_stem() {
+                        let stem_str = stem.to_string_lossy();
+                        // Skip init.lua to avoid recursion
+                        if stem_str != "init" {
+                            // Build module name: "meta" + "devserver" -> "meta.devserver"
+                            let module_name = if dir_path_str == "." {
+                                stem_str.to_string()
+                            } else {
+                                format!("{}.{}", dir_path_str.replace('/', "."), stem_str)
+                            };
+
+                            // Load via require (uses cache)
+                            let result: bool = lua_ctx
+                                .load(&format!("return require('{}')", module_name))
+                                .eval()
+                                .map_err(|e| LuaError::RuntimeError(format!(
+                                    "Failed to load '{}': {}", module_name, e
+                                )))?;
+                            results.push(result);
+                        }
+                    }
+                }
+            }
+
+            Ok(results)
+        })?;
+        globals.set("dir", dir_func)?;
+
         Ok(())
     }
 
@@ -151,16 +211,38 @@ impl LuaExecutor {
                         // Create loader function that will be called by require()
                         let path_clone = path.clone();
                         let context_clone = context.clone();
+                        let is_init = path.ends_with("/init");
 
-                        let loader = lua_ctx.create_function(move |_lua, _: ()| {
+                        let loader = lua_ctx.create_function(move |lua, _: ()| {
+                            // For init.lua files, set _DOTGK_CURRENT_DIR global
+                            if is_init {
+                                // Extract parent directory from path like "meta/init" -> "meta"
+                                let parent_dir = path_clone.rsplit_once('/').map(|(parent, _)| parent).unwrap_or(&path_clone);
+                                lua.globals()
+                                    .set("_DOTGK_CURRENT_DIR", parent_dir)
+                                    .map_err(|e| LuaError::RuntimeError(format!("Failed to set _DOTGK_CURRENT_DIR: {}", e)))?;
+                            }
+
                             // Load and evaluate the gatekeeper
                             let result = match crate::gatekeeper::load_and_evaluate_gatekeeper(&path_clone) {
                                 Ok(result) => {
                                     context_clone.leave(&path_clone);
+
+                                    // Clear _DOTGK_CURRENT_DIR after loading
+                                    if is_init {
+                                        let _ = lua.globals().set("_DOTGK_CURRENT_DIR", LuaValue::Nil);
+                                    }
+
                                     Ok(result.value)
                                 }
                                 Err(e) => {
                                     context_clone.leave(&path_clone);
+
+                                    // Clear _DOTGK_CURRENT_DIR on error too
+                                    if is_init {
+                                        let _ = lua.globals().set("_DOTGK_CURRENT_DIR", LuaValue::Nil);
+                                    }
+
                                     Err(LuaError::RuntimeError(format!(
                                         "Failed to load gatekeeper '{}': {}\nHint: Check that the gatekeeper exists and has valid syntax",
                                         path_clone, e
