@@ -248,7 +248,8 @@ mod tests {
 
     #[test]
     fn test_subdirectory_gatekeeper_os_linux() -> Result<()> {
-        test_helper("os/linux", true)
+        let expected = cfg!(target_os = "linux");
+        test_helper("os/linux", expected)
     }
 
     #[test]
