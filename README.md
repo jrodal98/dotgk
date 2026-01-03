@@ -138,15 +138,15 @@ Reference other gatekeepers using Lua's native `require()`:
 
 ```lua
 return any({
-  require("meta.devserver"),
-  hostname("iris"),
+  require("work.on_corporate_network"),
+  hostname("my-laptop"),
 })
 ```
 
 **Note:** Use dot notation for module names:
-- File: `~/.config/dotgk/gatekeepers/meta/devserver.lua`
-- Require: `require("meta.devserver")` (dot notation)
-- CLI: `dotgk get meta/devserver` (slash notation still works)
+- File: `~/.config/dotgk/gatekeepers/work/on_corporate_network.lua`
+- Require: `require("work.on_corporate_network")` (dot notation)
+- CLI: `dotgk get work/on_corporate_network` (slash notation still works)
 
 ### Directory Aggregates with init.lua
 
@@ -155,40 +155,37 @@ Directories can have an `init.lua` file that acts as the default module, followi
 **Use `dir()` to automatically aggregate all files in a directory:**
 
 ```lua
--- meta/init.lua (automatic aggregation)
-return any(dir())         -- Loads all files in meta/ (excluding init.lua itself)
+-- work/init.lua (automatic aggregation)
+return any(dir())         -- Loads all files in work/ (excluding init.lua itself)
 ```
 
 This is equivalent to manually listing all files:
 ```lua
 return any({
-  require("meta.devserver"),
-  require("meta.laptop"),
-  require("meta.linux"),
-  require("meta.mac"),
-  require("meta.windows"),
-  require("meta.wsl"),
+  require("work.on_corporate_network"),
+  require("work.vpn_connected"),
+  require("work.has_dev_tools"),
 })
 ```
 
 **Reference other directories:**
 ```lua
--- Complex aggregation
+-- Complex aggregation in custom/init.lua
 return all({
-  any(dir()),             -- At least one meta/* is true
+  any(dir()),             -- At least one custom/* is true
   any(dir("os")),         -- AND at least one os/* is true
 })
 ```
 
 Now you can use the directory name directly:
 ```lua
-require("meta")              -- Loads meta/init.lua
-require("meta.devserver")    -- Loads meta/devserver.lua
+require("work")              -- Loads work/init.lua
+require("work.vpn_connected") -- Loads work/vpn_connected.lua
 
--- Example in server.lua:
+-- Example usage:
 return any({
-  require("meta"),           -- Clean! Loads the aggregate
-  hostname("iris"),
+  require("work"),           -- Clean! Loads the aggregate
+  hostname("home-laptop"),
 })
 ```
 
@@ -197,14 +194,14 @@ return any({
 Lua's full power is available:
 
 ```lua
-local is_meta_laptop = any({
-  file_exists("/var/chef/outputs/cpe_info.json"),
-  file_exists("C:/chef/outputs/cpe_info.json"),
+local is_corporate = any({
+  file_exists("/etc/corporate.conf"),
+  hostname("work-desktop"),
 })
 
-local is_personal = hostname("home-desktop")
+local is_personal = hostname("home-laptop")
 
-return is_meta_laptop or is_personal
+return is_corporate or is_personal
 ```
 
 ### TTL (Cache Time-To-Live)

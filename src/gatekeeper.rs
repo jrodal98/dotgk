@@ -71,7 +71,7 @@ pub fn get_gatekeeper_path(name: &str) -> Result<std::path::PathBuf> {
             return Ok(direct_path);
         }
 
-        // Then try init.lua (e.g., "meta/init.lua")
+        // Then try init.lua (e.g., "myapp/init.lua")
         let init_path = config_dir.join(name).join("init.lua");
         if init_path.exists() {
             return Ok(init_path);
@@ -212,13 +212,13 @@ mod tests {
 
     // Test subdirectory-based gatekeeper loading
     #[test]
-    fn test_subdirectory_gatekeeper_meta_devserver() -> Result<()> {
-        test_helper("meta/devserver", true)
+    fn test_subdirectory_gatekeeper_myapp_devserver() -> Result<()> {
+        test_helper("myapp/devserver", true)
     }
 
     #[test]
-    fn test_subdirectory_gatekeeper_meta_laptop() -> Result<()> {
-        test_helper("meta/laptop", false)
+    fn test_subdirectory_gatekeeper_myapp_laptop() -> Result<()> {
+        test_helper("myapp/laptop", false)
     }
 
     #[test]
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_subdirectory_composite_gatekeeper() -> Result<()> {
-        test_helper("meta/composite", true)
+        test_helper("myapp/composite", true)
     }
 
     // Test basic evaluator types
@@ -292,10 +292,10 @@ mod tests {
         let gatekeepers = find_all_gatekeepers()?;
 
         // Should include both flat and subdirectory gatekeepers
-        assert!(gatekeepers.contains(&"meta/devserver".to_string()));
-        assert!(gatekeepers.contains(&"meta/laptop".to_string()));
+        assert!(gatekeepers.contains(&"myapp/devserver".to_string()));
+        assert!(gatekeepers.contains(&"myapp/laptop".to_string()));
         assert!(gatekeepers.contains(&"os/linux".to_string()));
-        assert!(gatekeepers.contains(&"meta/composite".to_string()));
+        assert!(gatekeepers.contains(&"myapp/composite".to_string()));
 
         // Verify we have some subdirectory gatekeepers
         let subdir_gatekeepers: Vec<_> = gatekeepers
