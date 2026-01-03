@@ -25,6 +25,26 @@ pub struct GatekeeperResult {
 }
 
 pub fn load_and_evaluate_gatekeeper(name: &str) -> Result<GatekeeperResult> {
+    // Auto-detect if we're loading an init.lua file and extract parent directory
+    let gatekeeper_path = get_gatekeeper_path(name)?;
+
+    // Check if the resolved path is an init.lua file
+    let current_dir = if gatekeeper_path.ends_with("init.lua") {
+        // This is an init.lua file - extract parent directory
+        // E.g., /path/to/meta/init.lua -> "meta"
+        gatekeeper_path
+            .parent()  // Get directory containing init.lua
+            .and_then(|p| p.file_name())  // Get directory name
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+    } else {
+        None
+    };
+
+    load_and_evaluate_gatekeeper_with_context(name, current_dir)
+}
+
+pub fn load_and_evaluate_gatekeeper_with_context(name: &str, current_dir: Option<String>) -> Result<GatekeeperResult> {
     let gatekeeper_path = get_gatekeeper_path(name)
         .with_context(|| format!("Failed to get gatekeeper path for '{}'", name))?;
 
@@ -42,6 +62,11 @@ pub fn load_and_evaluate_gatekeeper(name: &str) -> Result<GatekeeperResult> {
 
     let executor = LuaExecutor::new()
         .context("Failed to create Lua executor")?;
+
+    // Set current directory context if provided (for init.lua files)
+    if let Some(dir) = current_dir {
+        executor.set_current_dir(&dir)?;
+    }
 
     let result = executor.execute(&script)
         .with_context(|| format!("Failed to execute Lua gatekeeper '{}'", name))?;

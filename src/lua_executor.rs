@@ -54,6 +54,13 @@ impl LuaExecutor {
         Ok(Self { lua, _context: context })
     }
 
+    pub fn set_current_dir(&self, dir: &str) -> Result<()> {
+        self.lua.globals()
+            .set("_DOTGK_CURRENT_DIR", dir)
+            .map_err(|e| anyhow::anyhow!("Failed to set _DOTGK_CURRENT_DIR: {}", e))?;
+        Ok(())
+    }
+
     fn register_functions(lua: &Lua, context: std::rc::Rc<EvaluationContext>) -> Result<()> {
         let globals = lua.globals();
 
@@ -211,38 +218,17 @@ impl LuaExecutor {
                         // Create loader function that will be called by require()
                         let path_clone = path.clone();
                         let context_clone = context.clone();
-                        let is_init = path.ends_with("/init");
 
-                        let loader = lua_ctx.create_function(move |lua, _: ()| {
-                            // For init.lua files, set _DOTGK_CURRENT_DIR global
-                            if is_init {
-                                // Extract parent directory from path like "meta/init" -> "meta"
-                                let parent_dir = path_clone.rsplit_once('/').map(|(parent, _)| parent).unwrap_or(&path_clone);
-                                lua.globals()
-                                    .set("_DOTGK_CURRENT_DIR", parent_dir)
-                                    .map_err(|e| LuaError::RuntimeError(format!("Failed to set _DOTGK_CURRENT_DIR: {}", e)))?;
-                            }
-
+                        let loader = lua_ctx.create_function(move |_lua, _: ()| {
                             // Load and evaluate the gatekeeper
+                            // load_and_evaluate_gatekeeper auto-detects init.lua and sets context
                             let result = match crate::gatekeeper::load_and_evaluate_gatekeeper(&path_clone) {
                                 Ok(result) => {
                                     context_clone.leave(&path_clone);
-
-                                    // Clear _DOTGK_CURRENT_DIR after loading
-                                    if is_init {
-                                        let _ = lua.globals().set("_DOTGK_CURRENT_DIR", LuaValue::Nil);
-                                    }
-
                                     Ok(result.value)
                                 }
                                 Err(e) => {
                                     context_clone.leave(&path_clone);
-
-                                    // Clear _DOTGK_CURRENT_DIR on error too
-                                    if is_init {
-                                        let _ = lua.globals().set("_DOTGK_CURRENT_DIR", LuaValue::Nil);
-                                    }
-
                                     Err(LuaError::RuntimeError(format!(
                                         "Failed to load gatekeeper '{}': {}\nHint: Check that the gatekeeper exists and has valid syntax",
                                         path_clone, e
