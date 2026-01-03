@@ -14,7 +14,7 @@ use tracing::info;
 use tracing::instrument;
 
 use crate::cache::generators::CacheGeneratorRegistry;
-use crate::gatekeeper::Gatekeeper;
+use crate::gatekeeper::load_and_evaluate_gatekeeper;
 use crate::gatekeeper::find_all_gatekeepers;
 use crate::gatekeeper::get_config_dir;
 use crate::gatekeeper::get_gatekeeper_path;
@@ -440,25 +440,19 @@ pub fn sync_command(cache_path: Option<PathBuf>, force: bool) -> Result<()> {
 
         if should_evaluate {
             info!("Evaluating gatekeeper: {}", name);
-            let gatekeeper = Gatekeeper::from_name(&name)?;
-            match gatekeeper.evaluate() {
-                Ok(result) => {
-                    let expires_at = gatekeeper.ttl.map(|ttl| current_timestamp + ttl);
+            let gatekeeper_result = load_and_evaluate_gatekeeper(&name)?;
+            let result = gatekeeper_result.value;
+            let expires_at = gatekeeper_result.ttl.map(|ttl| current_timestamp + ttl);
 
-                    let entry = CacheEntry {
-                        value: result,
-                        ts: current_timestamp,
-                        update_type: UpdateType::Sync,
-                        expires_at,
-                    };
-                    cache_entries.insert(name.clone(), entry);
-                    updated_count += 1;
-                    info!("Cached result for '{}': {}", name, result);
-                }
-                Err(e) => {
-                    error!("Failed to evaluate gatekeeper '{}': {}", name, e);
-                }
-            }
+            let entry = CacheEntry {
+                value: result,
+                ts: current_timestamp,
+                update_type: UpdateType::Sync,
+                expires_at,
+            };
+            cache_entries.insert(name.clone(), entry);
+            updated_count += 1;
+            info!("Cached result for '{}': {}", name, result);
         } else {
             // Keep existing entry
             if let Some(entry) = existing_entry {

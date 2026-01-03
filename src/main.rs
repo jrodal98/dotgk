@@ -1,7 +1,7 @@
 mod cache;
 mod cli;
-mod evaluators;
 mod gatekeeper;
+mod lua_executor;
 mod settings;
 
 use anyhow::Result;
@@ -14,20 +14,20 @@ use tracing::info;
 use tracing::instrument;
 use tracing_subscriber::EnvFilter;
 
-use crate::gatekeeper::Gatekeeper;
+use crate::gatekeeper::load_and_evaluate_gatekeeper;
 
 #[instrument]
 fn evaluate_command(name: String, no_cache: bool) -> Result<()> {
     info!("Evaluating gatekeeper: {}", name);
 
-    let gatekeeper = Gatekeeper::from_name(&name)?;
-    let result = gatekeeper.evaluate()?;
+    let gatekeeper_result = load_and_evaluate_gatekeeper(&name)?;
+    let result = gatekeeper_result.value;
     info!("Evaluation result: {}", result);
     println!("{}", result);
 
     // Cache the result unless --no-cache is specified
     if !no_cache {
-        let ttl = gatekeeper.ttl;
+        let ttl = gatekeeper_result.ttl;
 
         if let Err(e) =
             cache::cache_result_with_ttl(&name, result, None, cache::UpdateType::Evaluate, ttl)

@@ -1,9 +1,8 @@
 # dotgk
 
 dotgk is a tool for evaluating gatekeepers - sets of conditions that determine
-whether features should be enabled. Gatekeepers are defined using JSON
-configuration files and can include conditions like file existence, hostname
-matching, OS detection, and more.
+whether features should be enabled. Gatekeepers are defined using Lua scripts
+and can include conditions like file existence, hostname matching, OS detection, and more.
 
 ## Installation
 
@@ -85,32 +84,128 @@ I haven't looked beyond neovim yet, but I'll update this once I play around with
 
 ## Configuration
 
-Gatekeepers are defined in JSON files with a `groups` array. Each group has an
-`evaluator` and `condition`:
+Gatekeepers are defined as Lua scripts in `~/.config/dotgk/gatekeepers/`. Each gatekeeper should return a boolean value.
 
-```json
-{
-  "groups": [
-    {
-      "evaluator": {
-        "type": "file",
-        "args": {
-          "path": "/home/user/some_file.txt"
-        }
-      },
-      "condition": "eq"
-    }
-  ]
-}
+### Simple Examples
+
+**Check if a file exists:**
+```lua
+return file_exists("/etc/devserver.owners")
 ```
 
-## Evaluator Types
+**Check operating system:**
+```lua
+return os("linux")
+```
 
-- `bool`: Static boolean values
-- `file`: File existence checks
-- `hostname`: Hostname matching
-- `os`: Operating system detection
-- `gatekeeper`: Reference other gatekeepers
+**Check hostname:**
+```lua
+return hostname("my-laptop")
+```
+
+### Combining Conditions
+
+Use `any`, `all`, or `none` combinators for complex logic:
+
+**Any (OR logic):**
+```lua
+return any({
+  file_exists("/var/chef/outputs/cpe_info.json"),
+  file_exists("C:/chef/outputs/cpe_info.json"),
+  file_exists("/mnt/c/chef/outputs/cpe_info.json"),
+})
+```
+
+**All (AND logic):**
+```lua
+return all({
+  os("linux"),
+  file_exists("/etc/debian_version"),
+})
+```
+
+**None (NOR logic):**
+```lua
+return none({
+  os("windows"),
+  file_exists("/windows/system32"),
+})
+```
+
+### Composing Gatekeepers
+
+Reference other gatekeepers using Lua's native `require()`:
+
+```lua
+return any({
+  require("meta.devserver"),
+  hostname("iris"),
+})
+```
+
+**Note:** Use dot notation for module names:
+- File: `~/.config/dotgk/gatekeepers/meta/devserver.lua`
+- Require: `require("meta.devserver")` (dot notation)
+- CLI: `dotgk get meta/devserver` (slash notation still works)
+
+### Directory Aggregates with init.lua
+
+Directories can have an `init.lua` file that acts as the default module, following standard Lua convention:
+
+```lua
+-- meta/init.lua
+return any({
+  require("meta.devserver"),
+  require("meta.laptop"),
+  require("meta.linux"),
+})
+```
+
+Now you can use the directory name directly:
+```lua
+require("meta")              -- Loads meta/init.lua
+require("meta.devserver")    -- Loads meta/devserver.lua
+
+-- Example in server.lua:
+return any({
+  require("meta"),           -- Clean! Loads the aggregate
+  hostname("iris"),
+})
+```
+
+### Using Variables
+
+Lua's full power is available:
+
+```lua
+local is_meta_laptop = any({
+  file_exists("/var/chef/outputs/cpe_info.json"),
+  file_exists("C:/chef/outputs/cpe_info.json"),
+})
+
+local is_personal = hostname("home-desktop")
+
+return is_meta_laptop or is_personal
+```
+
+### TTL (Cache Time-To-Live)
+
+Specify cache TTL in seconds using a comment:
+
+```lua
+-- ttl: 3600
+return file_exists("/tmp/cache")
+```
+
+## Available Functions
+
+- `file_exists(path: string) -> bool` - Check if a file exists
+- `hostname(target: string) -> bool` - Match against system hostname
+- `os(name: string) -> bool` - Check operating system ("linux", "macos", "windows", "unix")
+- `require(name: string) -> bool` - Load another gatekeeper (standard Lua, use dot notation)
+- `any(checks: table) -> bool` - OR logic (at least one must be true)
+- `all(checks: table) -> bool` - AND logic (all must be true)
+- `none(checks: table) -> bool` - NOR logic (all must be false)
 
 ## Examples
 
